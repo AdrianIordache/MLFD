@@ -45,7 +45,7 @@ def train(model, loader, optimizer, scheduler, criterion, epoch):
                       f"{time_since(start, float(batch + 1) / len(loader))}, " + \
                       f"Acc@1: {top1_accs.value:.3f}({top1_accs.average:.3f}), " + \
                       f"Acc@5: {top5_accs.value:.3f}({top5_accs.average:.3f}), " + \
-                      f"Loss: {losses.value:.3f}({losses.average:.3f}), LR: {optimizer.param_groups[0]['lr']}"
+                      f"Loss: {losses.value:.3f}({losses.average:.3f}), LR: {optimizer.param_groups[0]['lr']:.6f}"
             
             print(message)
         
@@ -100,7 +100,7 @@ def run():
     seed_everything(SEED)
 
     if CFG["use_wandb"]: 
-        wandb.init(project = "demo", config = CFG)
+        wandb.init(project = "CIFAR100-Training", config = CFG)
 
     train_images, train_labels = load_cifar(PATH_TO_CIFAR_TRAIN)
     test_images,  test_labels  = load_cifar(PATH_TO_CIFAR_TEST)
@@ -121,8 +121,8 @@ def run():
         T.Normalize(CIFAR_MEAN, CIFAR_STD)
     ])
 
-    trainset = CIFAR100Dataset(train_images[:1000], train_labels[:1000], train_transforms)
-    testset  = CIFAR100Dataset(test_images[:100], test_labels[:100], test_transforms)
+    trainset = CIFAR100Dataset(train_images, train_labels, train_transforms)
+    testset  = CIFAR100Dataset(test_images, test_labels, test_transforms)
 
     trainloader = DataLoader(trainset, **CFG["trainloader"])
     testloader  = DataLoader(testset, **CFG["testloader"])
