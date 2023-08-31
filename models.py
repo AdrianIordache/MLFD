@@ -1,6 +1,6 @@
 from common import *
 
-class CIFAR100Model(nn.Module):
+class BaselineModel(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.model = timm.create_model(**config)

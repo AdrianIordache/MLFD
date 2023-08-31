@@ -8,7 +8,7 @@ CFG = dict(
 
 	model = dict(
 		model_name     = "resnet18",
-		num_classes    = 100,
+		num_classes    = 1000, # 100,
 		pretrained     = True, 
 		drop_rate      = 0.0, # 0.3,
 		drop_path_rate = 0.0, # 0.2
@@ -57,7 +57,7 @@ CFG = dict(
 	),
 
 	print_freq = 10,
-	use_wandb  = True,
+	use_wandb  = False,
 )
 
 CFG["scheduler_param"]["max_lr"] = CFG["optimizer_param"]["lr"]

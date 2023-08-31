@@ -24,3 +24,23 @@ class CIFAR100Dataset(Dataset):
             image = self.transform(image)
         
         return image, label     
+
+class TinyImageNetDataset(Dataset):
+    def __init__(self, data: pd.DataFrame, transform = None):
+        super().__init__()
+        self.data      = data
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.data)
+    
+    def __getitem__(self, idx):
+        image_path = self.data["path"].values[idx]
+
+        image = cv2.imread(image_path)
+        label = self.data["class"].values[idx]
+
+        if self.transform:
+            image = self.transform(image)
+        
+        return image, label 

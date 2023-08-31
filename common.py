@@ -15,6 +15,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
+from PIL import Image
 from typing import List
 from IPython.display import display
 from torchvision import datasets, transforms
@@ -58,8 +59,14 @@ PATH_TO_CIFAR_TRAIN  = "./data/cifar-100/train"
 PATH_TO_CIFAR_TEST   = "./data/cifar-100/test"
 PATH_TO_CIFAR_META   = "./data/cifar-100/meta"
 
-CIFAR_MEAN = [0.5073620348243464, 0.4866895632914624, 0.44108857134650736]
-CIFAR_STD  = [0.2674881548800154, 0.2565930997269334, 0.2763085095510782]
+PATH_TO_TINY_IMAGENET_TRAIN = "./data/tiny-imagenet-200/train.csv"
+PATH_TO_TINY_IMAGENET_TEST  = "./data/tiny-imagenet-200/valid.csv"
+
+CIFAR_MEANS = [0.5073620348243464, 0.4866895632914624, 0.44108857134650736]
+CIFAR_STDS  = [0.2674881548800154, 0.2565930997269334, 0.2763085095510782]
+
+IMAGENET_MEANS = [0.485, 0.456, 0.406]
+IMAGENET_STDS  = [0.229, 0.224, 0.225]
 
 def time_since(since, percent):
     def seconds_as_minutes(seconds):
@@ -99,7 +106,7 @@ def overfit_the_batch(loader):
     # images = torch.tensor(np.zeros((16, 3, 256, 256))).float().to(device)
     return batch, images, labels
 
-def reverse_normalization(images, means = CIFAR_MEAN, stds = CIFAR_STD):
+def reverse_normalization(images, means = CIFAR_MEANS, stds = CIFAR_STDS):
     reversed_images = images.new(*images.size())
     reversed_images[:, 0, :, :] = images[:, 0, :, :] * stds[0] + means[0]
     reversed_images[:, 1, :, :] = images[:, 1, :, :] * stds[1] + means[1]
@@ -240,3 +247,4 @@ def accuracy(output: torch.Tensor, target: torch.Tensor, topk=(1,)) -> List[torc
             topk_acc = tot_correct_topk / batch_size  # topk accuracy for entire batch
             list_topk_accs.append(topk_acc)
         return list_topk_accs  # list of topk accuracies for entire batch [topk1, topk2, ... etc]
+
