@@ -9,14 +9,14 @@ def run():
     seed_everything(SEED)
 
     if CFG["use_wandb"]: 
-        wandb.init(project = "TinyImageNet-Training", config = CFG)
+        wandb.init(project = "ImageNetSketch-Training", config = CFG)
 
-    train_df = pd.read_csv(PATH_TO_TINY_IMAGENET_TRAIN)
-    test_df  = pd.read_csv(PATH_TO_TINY_IMAGENET_TEST)
+    train_df = pd.read_csv(PATH_TO_IMAGENET_SKETCH_TRAIN)
+    test_df  = pd.read_csv(PATH_TO_IMAGENET_SKETCH_TEST)
 
     train_transforms = T.Compose([
         T.ToPILImage(),
-        T.Resize(CFG["image_size"]),
+        T.Resize((CFG["image_size"], CFG["image_size"])),
         ] + CFG['train_transforms'] + [
         T.ToTensor(),
         T.Normalize(IMAGENET_MEANS, IMAGENET_STDS)
@@ -24,7 +24,7 @@ def run():
 
     test_transforms = T.Compose([
         T.ToPILImage(),
-        T.Resize(CFG["image_size"]),
+        T.Resize((CFG["image_size"], CFG["image_size"])),
         ] + CFG['test_transforms'] + [
         T.ToTensor(),
         T.Normalize(IMAGENET_MEANS, IMAGENET_STDS)
@@ -58,7 +58,7 @@ def run():
             break
 
     if CFG["use_wandb"]: 
-        torch.save(model.state_dict(), f"./weights/tiny-imagenet/{wandb.run.name}.pt")
+        torch.save(model.state_dict(), f"./weights/imagenet-sketch/{wandb.run.name}.pt")
         wandb.finish()
 
 if __name__ == "__main__":

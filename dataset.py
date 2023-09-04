@@ -25,7 +25,7 @@ class CIFAR100Dataset(Dataset):
         
         return image, label     
 
-class TinyImageNetDataset(Dataset):
+class ImageNetDataset(Dataset):
     def __init__(self, data: pd.DataFrame, transform = None):
         super().__init__()
         self.data      = data

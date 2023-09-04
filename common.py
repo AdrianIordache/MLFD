@@ -21,6 +21,7 @@ from IPython.display import display
 from torchvision import datasets, transforms
 from albumentations.pytorch import ToTensorV2
 from torch.utils.data import Dataset, DataLoader
+from sklearn.model_selection import StratifiedKFold
 from torchvision.transforms.autoaugment import AutoAugmentPolicy
 from torch.optim.lr_scheduler import CosineAnnealingLR, CosineAnnealingWarmRestarts, OneCycleLR
 
@@ -61,6 +62,9 @@ PATH_TO_CIFAR_META   = "./data/cifar-100/meta"
 
 PATH_TO_TINY_IMAGENET_TRAIN = "./data/tiny-imagenet-200/train.csv"
 PATH_TO_TINY_IMAGENET_TEST  = "./data/tiny-imagenet-200/valid.csv"
+
+PATH_TO_IMAGENET_SKETCH_TRAIN = "./data/imagenet-sketch/train.csv"
+PATH_TO_IMAGENET_SKETCH_TEST  = "./data/imagenet-sketch/valid.csv"
 
 CIFAR_MEANS = [0.5073620348243464, 0.4866895632914624, 0.44108857134650736]
 CIFAR_STDS  = [0.2674881548800154, 0.2565930997269334, 0.2763085095510782]
@@ -137,30 +141,13 @@ def free_gpu_memory(device, object = None, verbose = False):
     with torch.cuda.device(device):
         torch.cuda.empty_cache()
 
-def load_cifar(path):
-    with open(path, "rb") as file:
-        data_dict = pickle.load(file, encoding = "bytes")
+def generate_folds(data: pd.DataFrame, skf_column: str, n_folds: int = 5, random_state = SEED):
+    skf = StratifiedKFold(n_splits = n_folds, shuffle = True, random_state = SEED)
+    for fold, (train_idx, valid_idx) in enumerate(skf.split(data, data[skf_column])):
+        data.loc[valid_idx, 'fold'] = fold
 
-    images = data_dict[b'data']
-    labels = np.array(data_dict[b'fine_labels'])
-    return images, labels
-
-def _compute_mean_and_std(train_images, test_images):
-    cifar_images = np.vstack((train_images, test_images))
-
-    mean = [
-        np.mean(cifar_images[:,      : 1024], axis = (0, 1)) / 255,    
-        np.mean(cifar_images[:, 1024 : 2048], axis = (0, 1)) / 255,
-        np.mean(cifar_images[:, 2048 :     ], axis = (0, 1)) / 255
-    ]
-
-    std  = [
-        np.std(cifar_images[:,      : 1024], axis = (0, 1)) / 255,    
-        np.std(cifar_images[:, 1024 : 2048], axis = (0, 1)) / 255,
-        np.std(cifar_images[:, 2048 :     ], axis = (0, 1)) / 255
-    ]
-
-    return mean, std
+    data['fold'] = data['fold'].astype(int)
+    return data
 
 def get_optimizer(parameters, config_file):
     assert config_file["optimizer"] in \

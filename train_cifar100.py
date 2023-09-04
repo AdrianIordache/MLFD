@@ -1,8 +1,10 @@
-from common      import *
-from models      import *
-from dataset     import *
-from labels      import *
-from config_file import CFG
+from common        import *
+from models        import *
+from dataset       import *
+from labels        import *
+from procedures    import train, validate
+from preprocessing import load_cifar
+from config_file   import CFG
 
 def run():
     seed_everything(SEED)
