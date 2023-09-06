@@ -91,3 +91,31 @@ def validate(model, loader, criterion):
     if CFG["use_wandb"]: wandb.log({"valid_epoch_acc@1": epoch_top1_acc, "valid_epoch_acc@5" : epoch_top5_acc})
     free_gpu_memory(DEVICE)
     return epoch_top1_acc
+
+def evaluate(model, loader, criterion):
+    losses    = AverageMeter()
+    top1_accs = AverageMeter()
+    top5_accs = AverageMeter()
+
+    labels_, outputs_ = [], []
+    start  = end = time.time()
+    for batch, (images, labels) in enumerate(loader):
+        images = images.to(DEVICE)
+        labels = labels.to(DEVICE)
+
+        with torch.no_grad():
+            outputs = model(images)
+
+        top1_acc, top5_acc = accuracy(outputs, labels, topk = (1, 5))
+        loss = criterion(outputs, labels)
+
+        losses.update(RD(loss.item()), images.shape[0])
+        top1_accs.update(RD(top1_acc.item()), images.shape[0])
+        top5_accs.update(RD(top5_acc.item()), images.shape[0])
+        
+        labels_.extend(labels.detach().cpu().numpy())
+        outputs_.extend(outputs.detach().cpu().numpy())
+
+    epoch_top1_acc, epoch_top5_acc = accuracy(torch.as_tensor(np.array(outputs_)), torch.as_tensor(np.array(labels_)), topk = (1, 5))
+    free_gpu_memory(DEVICE)
+    return epoch_top1_acc, epoch_top5_acc
