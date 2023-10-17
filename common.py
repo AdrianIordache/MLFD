@@ -9,6 +9,7 @@ import pickle
 import random
 import numpy as np
 import pandas as pd
+import polars as pol
 import matplotlib.pyplot as plt
 
 import torch
@@ -18,10 +19,11 @@ import torch.optim as optim
 from PIL import Image
 from typing import List
 from IPython.display import display
+from collections import OrderedDict
 from torchvision import datasets, transforms
 from albumentations.pytorch import ToTensorV2
-from torch.utils.data import Dataset, DataLoader
 from sklearn.model_selection import StratifiedKFold
+from torch.utils.data import Dataset, DataLoader, TensorDataset
 from torchvision.transforms.autoaugment import AutoAugmentPolicy
 from torch.optim.lr_scheduler import CosineAnnealingLR, CosineAnnealingWarmRestarts, OneCycleLR
 
@@ -234,4 +236,12 @@ def accuracy(output: torch.Tensor, target: torch.Tensor, topk=(1,)) -> List[torc
             topk_acc = tot_correct_topk / batch_size  # topk accuracy for entire batch
             list_topk_accs.append(topk_acc)
         return list_topk_accs  # list of topk accuracies for entire batch [topk1, topk2, ... etc]
+
+
+class AdaptedCELoss(nn.Module):
+    def __init__(self):
+        super(AdaptedCELoss, self).__init__()
+
+    def forward(self, soft_prob, soft_targets):
+        return -torch.sum(soft_targets * soft_prob) / soft_prob.size()[0]
 

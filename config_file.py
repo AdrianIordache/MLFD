@@ -1,21 +1,26 @@
 from common import *
 
-CFG = dict(
-	image_size = 224,
-	optimizer  = "Adam",
-	scheduler  = None, # "OneCycleLR",
-	epochs     = 200,
+PRINT_FREQ = 10
+USE_WANDB  = False
+
+student_config = dict(
+	image_size  = 224,
+	optimizer   = "Adam",
+	scheduler   = None, # "OneCycleLR",
+	epochs      = 200,
+	n_embedding = 2048,
+	activation  = nn.Identity(),
 
 	model = dict(
-		model_name     = "resnet18",
-		num_classes    = 1000, # 100,
-		pretrained     = True, 
-		drop_rate      = 0.0, # 0.3,
-		drop_path_rate = 0.0, # 0.2
+		model_name     = "tf_efficientnet_b0.in1k",
+		num_classes    = 200, # 100,
+		pretrained     = False, 
+		drop_rate      = 0.2, # 0.3,
+		drop_path_rate = 0.2, # 0.2
 	),
 
 	optimizer_param  = dict(
-		lr           = 0.001,
+		lr           = 0.0001,
 		weight_decay = 0.001,
 	),
 
@@ -37,7 +42,7 @@ CFG = dict(
 	],
 
 	trainloader = dict(
-		batch_size     = 768,
+		batch_size     = 240,
 		shuffle        = False, 
 		num_workers    = 4,
 		pin_memory     = True,
@@ -56,10 +61,67 @@ CFG = dict(
 		drop_last      = False
 	),
 
-	print_freq = 10,
-	use_wandb  = False,
+	distillation_loss = AdaptedCELoss(),
+	temperature       = 2,
+	kd_alpha          = 0.0
 )
 
-CFG["scheduler_param"]["max_lr"] = CFG["optimizer_param"]["lr"]
-CFG["scheduler_param"]["epochs"] = CFG["epochs"]
-CFG["testloader"]["batch_size"]  = CFG["trainloader"]["batch_size"] * 2
+student_config["scheduler_param"]["max_lr"] = student_config["optimizer_param"]["lr"]
+student_config["scheduler_param"]["epochs"] = student_config["epochs"]
+student_config["testloader"]["batch_size"]  = student_config["trainloader"]["batch_size"] * 2
+
+teacher_config = dict(
+    epochs    = 2420,  
+    dataset   = "ImageNetSketch", # ["CIFAR100", "TinyImageNet", "ImageNetSketch"]
+    
+	optimizer = "Adam",
+    scheduler = None, # "OneCycleLR",
+    
+    model     = None,
+    p_dropout = 0.9,
+    n_outputs = None,
+
+    optimizer_param  = dict(
+        lr           = 0.0002,
+        weight_decay = 0.000,
+    ),
+
+    scheduler_param  = dict(
+        max_lr           = None,
+        pct_start        = 0.3,
+        div_factor       = 25,
+        epochs           = None,
+        steps_per_epoch  = 25,
+        final_div_factor = 1e4
+    ),
+
+    trainloader = dict(
+        batch_size     = 2048,
+        shuffle        = False, 
+        num_workers    = 28,
+        pin_memory     = True,
+        sampler        = sampler, 
+        worker_init_fn = seed_worker, 
+        drop_last      = False
+    ),
+
+    testloader = dict(
+        batch_size     = None,
+        shuffle        = False, 
+        num_workers    = 28,
+        pin_memory     = True,
+        sampler        = sampler, 
+        worker_init_fn = seed_worker, 
+        drop_last      = False
+    ),
+)
+
+teacher_config["scheduler_param"]["max_lr"]     = teacher_config["optimizer_param"]["lr"]
+teacher_config["scheduler_param"]["epochs"]     = teacher_config["epochs"]
+teacher_config["testloader"]["batch_size"]      = teacher_config["trainloader"]["batch_size"] * 4
+
+assert teacher_config["dataset"] in ["CIFAR100", "TinyImageNet", "ImageNetSketch"]
+
+if teacher_config["dataset"] == "CIFAR100": teacher_config["n_outputs"] = 100
+elif teacher_config["dataset"] == "TinyImageNet": teacher_config["n_outputs"] = 200
+else: teacher_config["n_outputs"] = 1000

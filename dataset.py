@@ -1,11 +1,20 @@
 from common import *
 
 class CIFAR100Dataset(Dataset):
-    def __init__(self, images: np.array, labels: np.array, transform = None):
+    def __init__(self, images: np.array, labels: np.array, transform = None, path_embeddings_df: pol.DataFrame = None):
         super().__init__()
-        self.images    = images
-        self.labels    = labels
-        self.transform = transform
+        self.images             = images
+        self.labels             = labels
+        self.transform          = transform
+        self.path_embeddings_df = path_embeddings_df
+
+        self.features = [f"cifar_x{i}" for i in range(0, 2048)] + \
+                        [f"tiny_imagenet_x{i}" for i in range(0, 2048)] + \
+                        [f"imagenet_sketch_x{i}" for i in range(0, 2048)]
+
+        if self.path_embeddings_df is not None:
+            embeddings_df   = pol.read_csv(self.path_embeddings_df)
+            self.embeddings = embeddings_df.to_numpy()
 
     def __len__(self):
         return len(self.images)
@@ -23,13 +32,29 @@ class CIFAR100Dataset(Dataset):
         if self.transform:
             image = self.transform(image)
         
-        return image, label     
+        if self.path_embeddings_df is not None:
+            embedding = self.embeddings[idx, : -1]
+            e_label   = self.embeddings[idx, -1]
+            
+            assert e_label ==  label
+            return image, embedding, label
+        else:
+            return image, label     
 
 class ImageNetDataset(Dataset):
-    def __init__(self, data: pd.DataFrame, transform = None):
+    def __init__(self, data: pd.DataFrame, transform = None, path_embeddings_df: pol.DataFrame = None):
         super().__init__()
         self.data      = data
         self.transform = transform
+        self.path_embeddings_df = path_embeddings_df
+
+        self.features = [f"cifar_x{i}" for i in range(0, 2048)] + \
+                        [f"tiny_imagenet_x{i}" for i in range(0, 2048)] + \
+                        [f"imagenet_sketch_x{i}" for i in range(0, 2048)]
+
+        if self.path_embeddings_df is not None:
+            embeddings_df   = pol.read_csv(self.path_embeddings_df)
+            self.embeddings = embeddings_df.to_numpy()
 
     def __len__(self):
         return len(self.data)
@@ -43,4 +68,11 @@ class ImageNetDataset(Dataset):
         if self.transform:
             image = self.transform(image)
         
-        return image, label 
+        if self.path_embeddings_df is not None:
+            embedding = self.embeddings[idx, : -1]
+            e_label   = self.embeddings[idx, -1]
+            
+            assert e_label ==  label
+            return image, embedding, label
+        else:
+            return image, label  

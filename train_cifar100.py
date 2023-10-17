@@ -2,14 +2,15 @@ from common        import *
 from models        import *
 from dataset       import *
 from labels        import *
+from config_file   import *
 from procedures    import train, validate
 from preprocessing import load_cifar
-from config_file   import CFG
 
 def run():
+    CFG = student_config
     seed_everything(SEED)
 
-    if CFG["use_wandb"]: 
+    if USE_WANDB: 
         wandb.init(project = "CIFAR100-Training", config = CFG)
 
     train_images, train_labels = load_cifar(PATH_TO_CIFAR_TRAIN)
@@ -37,29 +38,30 @@ def run():
     trainloader = DataLoader(trainset, **CFG["trainloader"])
     testloader  = DataLoader(testset, **CFG["testloader"])
 
-    model = BaselineModel(CFG["model"])
+    model = IntermediateModel(CFG["model"], CFG["n_embedding"], CFG["activation"])
     model.to(DEVICE)
     
     optimizer = get_optimizer(model.parameters(), CFG)
     scheduler = get_scheduler(optimizer, CFG)
     criterion = nn.CrossEntropyLoss()
 
-    best_model, best_accuracy = None, 0
-    if CFG["use_wandb"]: wandb.watch(model, criterion, log = "all", log_freq = 10)
+    best_model, best_accuracy, best_epoch = None, 0, None
+    if USE_WANDB: wandb.watch(model, criterion, log = "all", log_freq = 10)
     for epoch in range(CFG["epochs"]):
         train_top1_acc = train(model, trainloader, optimizer, scheduler, criterion, epoch)
         valid_top1_acc = validate(model, testloader, criterion)
 
         if valid_top1_acc > best_accuracy:
             best_model    = copy.deepcopy(model)
-            best_accuracy = valid_top1_acc
+            best_accuracy = np.round(valid_top1_acc, 2)
+            best_epoch    = epoch
 
         if train_top1_acc - valid_top1_acc > 10.0:
             print("Early stopping condition...")
             break
 
-    if CFG["use_wandb"]: 
-        torch.save(model.state_dict(), f"./weights/cifar100/{wandb.run.name}.pt")
+    if USE_WANDB: 
+        torch.save(best_model.state_dict(), f"./weights/students/cifar100/{wandb.run.name}_epoch_{best_epoch}_acc@1_{best_accuracy}.pt")
         wandb.finish()
 
 if __name__ == "__main__":
