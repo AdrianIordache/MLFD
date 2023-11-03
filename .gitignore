@@ -5,3 +5,4 @@ wandb/
 embeddings/
 delete.py
 utils/
+.hypothesis/

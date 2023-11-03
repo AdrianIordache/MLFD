@@ -184,3 +184,67 @@ def train_kd(student, teacher, loader, optimizer, scheduler, criterion, epoch):
     if USE_WANDB: wandb.log({"train_epoch_acc@1": epoch_top1_acc, "train_epoch_acc@5" : epoch_top5_acc})
     free_gpu_memory(DEVICE)
     return epoch_top1_acc.item()
+
+
+def train_kd_conv(student, teacher, loader, optimizer, scheduler, criterion, epoch):
+    def get_activation(name, out_dict):
+        def hook(model, input, output):
+            out_dict[name] = output
+        return hook
+
+    student_maps = {}
+    student.model.layer4.register_forward_hook(get_activation('size_7', student_maps))
+
+    student.train()
+    teacher.eval()
+
+    losses    = AverageMeter()
+    top1_accs = AverageMeter()
+    top5_accs = AverageMeter()
+
+
+    labels_, outputs_ = [], []
+    start = end = time.time()
+    for batch, (images, maps, labels) in enumerate(loader):
+        images = images.to(DEVICE)
+        labels = labels.to(DEVICE)
+        maps   = maps.to(DEVICE)
+
+        with torch.no_grad():
+            teacher_logits, teacher_maps = teacher(maps, out_maps = True)
+
+        student_logits     = student(images)
+        top1_acc, top5_acc = accuracy(student_logits, labels, topk = (1, 5))
+
+        loss = criterion(student_logits, teacher_logits, student_maps['size_7'], teacher_maps, labels)        
+        loss.backward()
+
+        optimizer.step()
+        if scheduler is not None: scheduler.step()
+        optimizer.zero_grad()
+
+        losses.update(RD(loss.item()), images.shape[0])
+        top1_accs.update(RD(top1_acc.item()), images.shape[0])
+        top5_accs.update(RD(top5_acc.item()), images.shape[0])
+        
+        labels_.extend(labels.detach().cpu().numpy())
+        outputs_.extend(student_logits.detach().cpu().numpy())
+
+        end = time.time()
+        if USE_WANDB: 
+            wandb.log({"train_avg_acc@1": top1_accs.average, "train_avg_acc@5" : top5_accs.average, \
+                        "train_avg_loss": losses.average, "lr": optimizer.param_groups[0]['lr']})
+
+        if (batch + 1) % PRINT_FREQ == 0 or (batch + 1) == len(loader):
+            message = f"[T] E/B: [{epoch + 1}][{batch + 1}/{len(loader)}], " + \
+                      f"{time_since(start, float(batch + 1) / len(loader))}, " + \
+                      f"Acc@1: {top1_accs.value:.3f}({top1_accs.average:.3f}), " + \
+                      f"Acc@5: {top5_accs.value:.3f}({top5_accs.average:.3f}), " + \
+                      f"Loss: {losses.value:.3f}({losses.average:.3f}), LR: {optimizer.param_groups[0]['lr']:.6f}"
+            
+            print(message)
+        
+    epoch_top1_acc, epoch_top5_acc = accuracy(torch.as_tensor(np.array(outputs_)), torch.as_tensor(np.array(labels_)), topk = (1, 5))
+    if USE_WANDB: wandb.log({"train_epoch_acc@1": epoch_top1_acc, "train_epoch_acc@5" : epoch_top5_acc})
+    free_gpu_memory(DEVICE)
+    return epoch_top1_acc.item()
