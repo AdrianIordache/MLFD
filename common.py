@@ -28,8 +28,13 @@ from torchvision.transforms.autoaugment import AutoAugmentPolicy
 from torch.optim.lr_scheduler import CosineAnnealingLR, CosineAnnealingWarmRestarts, OneCycleLR
 
 import timm
+import torchvision
 import albumentations as A
 import torchvision.transforms as T
+
+# from timm.utils import accuracy
+from timm.data.auto_augment import rand_augment_transform
+from timm.data import create_transform
 
 import warnings
 warnings.filterwarnings("ignore", message = "torch.distributed.reduce_op is deprecated")
@@ -120,6 +125,20 @@ def reverse_normalization(images, means = CIFAR_MEANS, stds = CIFAR_STDS):
     reversed_images[:, 1, :, :] = images[:, 1, :, :] * stds[1] + means[1]
     reversed_images[:, 2, :, :] = images[:, 2, :, :] * stds[2] + means[2]
     return reversed_images
+
+
+def imshow(inp, title = None, means = IMAGENET_MEANS, stds = IMAGENET_STDS):
+    inp = inp.numpy().transpose((1, 2, 0))
+    mean = np.array(means)
+    std = np.array(stds)
+    inp = std * inp + mean
+    inp = np.clip(inp, 0, 1)
+    plt.imshow(inp[:,:,[2,1,0]])
+    plt.savefig("image.png")
+
+    # inputs, classes = next(iter(trainloader))
+    # out = torchvision.utils.make_grid(inputs)
+    # imshow(out, title = [x.item() for x in classes])
 
 def debug_tests():
     batch, images, labels = overfit_the_batch(loader)

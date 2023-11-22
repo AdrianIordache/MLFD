@@ -25,11 +25,11 @@ class BaselineModel(nn.Module):
         return x
 
 
-class IntermediateModel(nn.Module):
+class ExpertModel(nn.Module):
     def __init__(self, config, n_embedding, activation):
         super().__init__()
         self.model = timm.create_model(**config)
-    
+        # print(self.model)
         if "efficientnet" in config["model_name"]:
             in_features = self.model.classifier.in_features
             self.model.classifier = nn.Identity()
@@ -37,19 +37,24 @@ class IntermediateModel(nn.Module):
             in_features = self.model.fc.in_features
             self.model.fc = nn.Identity()
         else:
-            in_features = self.model.head.in_features
-            self.model.head = nn.Identity()
+            self.in_features = self.model.head.fc.in_features
+            self.model.head.fc = nn.Identity()
 
-        self.activation = activation
-        self.intermediate = nn.Linear(in_features,    n_embedding)
-        self.head  = nn.Linear(n_embedding, config["num_classes"])
+        self.activation  = activation
+        self.n_embedding = n_embedding
+
+        self.latent_proj = nn.Linear(self.in_features, self.n_embedding)
+        self.output_proj = nn.Linear(self.n_embedding, config["num_classes"])
         
-    def forward(self, x, backbone = False, embeddings = False, debug = False):
+    def forward(self, x):
         x = self.model(x)
-        if backbone: return x
-        x = self.activation(self.intermediate(x))
-        if embeddings: return x
-        x = self.head(x)
+        
+        if self.n_embedding == self.in_features:
+            x = self.output_proj(x)
+        else:
+            x = self.activation(self.latent_proj(x))
+            x = self.output_proj(x)
+
         return x
 
 class LinearTeacherModel(nn.Module):

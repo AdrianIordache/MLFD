@@ -1,7 +1,7 @@
 from common      import *
 from config_file import *
 
-def train(model, loader, optimizer, scheduler, criterion, epoch):
+def train(model, loader, optimizer, scheduler, criterion, epoch, mixup_fn):
     model.train()
 
     losses    = AverageMeter()
@@ -14,8 +14,15 @@ def train(model, loader, optimizer, scheduler, criterion, epoch):
         images = images.to(DEVICE)
         labels = labels.to(DEVICE)
 
+        if mixup_fn is not None:
+            images, labels = mixup_fn(images, labels)
+
         outputs = model(images)
-        top1_acc, top5_acc = accuracy(outputs, labels, topk = (1, 5))
+
+        if mixup_fn is not None:
+            top1_acc, top5_acc = torch.tensor(-1), torch.tensor(-1)
+        else:
+            top1_acc, top5_acc = accuracy(outputs, labels, topk = (1, 5))
 
         loss = criterion(outputs, labels)
         loss.backward()
@@ -44,8 +51,12 @@ def train(model, loader, optimizer, scheduler, criterion, epoch):
                       f"Loss: {losses.value:.3f}({losses.average:.3f}), LR: {optimizer.param_groups[0]['lr']:.6f}"
             
             print(message)
-        
-    epoch_top1_acc, epoch_top5_acc = accuracy(torch.as_tensor(np.array(outputs_)), torch.as_tensor(np.array(labels_)), topk = (1, 5))
+    
+    if mixup_fn is not None:
+        epoch_top1_acc, epoch_top5_acc = torch.tensor(-1), torch.tensor(-1)
+    else:
+        epoch_top1_acc, epoch_top5_acc = accuracy(torch.as_tensor(np.array(outputs_)), torch.as_tensor(np.array(labels_)), topk = (1, 5))
+    
     if USE_WANDB: wandb.log({"train_epoch_acc@1": epoch_top1_acc, "train_epoch_acc@5" : epoch_top5_acc})
     free_gpu_memory(DEVICE)
     return epoch_top1_acc.item()
