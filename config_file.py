@@ -2,16 +2,17 @@ from common import *
 
 PRINT_FREQ = 10
 USE_WANDB  = True
-RUN_NAME   = "exp-3-stoch-0.4"
+RUN_NAME   = "exp-26-teacher-28"
 
 config = dict(
-	advanced  = True,
-	dataset   = "TinyImageNet", # ["CIFAR100", "TinyImageNet", "ImageNetSketch"]
+	e_size    = 28,
+	advanced  = False,
+	dataset   = "CIFAR100", # ["CIFAR100", "TinyImageNet", "ImageNetSketch"]
 	
-	image_size  = 256,
+	image_size  = 224,
 	optimizer   = "AdamW",
 	scheduler   = "OneCycleLR", # "OneCycleLR",
-	epochs      = 100,
+	epochs      = 137,
 	n_embedding = 768,
 	activation  = nn.Identity(),
 
@@ -19,29 +20,28 @@ config = dict(
 		model_name     = None, # "resnet18", tf_efficientnet_b0.in1k, "seresnext26t_32x4d"
 		num_classes    = None, # 100, 200, 1000
 		pretrained     = False, 
-		drop_rate      = 0.4,
-		drop_path_rate = 0.4, # stochastic depth
+		drop_rate      = 0.2,
+		drop_path_rate = 0.3, # stochastic depth
 	),
 
-    linear_teacher = dict(
-    	n_inputs   = 2048 * 3,
-    	n_outputs  = None,
-    	p_dropout  = 0.9,
-    ),
-
-    conv_teacher = dict(
-		nf_space   = 4096,
-		nf_outputs = None,
+    teacher = dict(
+    	nf_space   = 512,
+    	nf_outputs = [128, 256, 512],  # [128, 256, 512],
 		n_outputs  = None,
 
-		nf_c = 512,
-		nf_t = 1280,
-		nf_s = 2048
+		activation = nn.GELU(),
+		p_dropout  = 0.0
+	),
+
+	n_features_maps = dict(
+		nf_c =  128, # 128, # 256,  # 512,  # 2048,
+		nf_t =   40, #  40, # 112,  # 1280, # 2048,
+		nf_s =  512, # 512, # 1024, # 2048, # 2048,
 	),
 
 	label_smoothing  = 0.1,
 	optimizer_param  = dict(
-		lr           = 1e-3,
+		lr           = 0.00002,
 		weight_decay = 0.05,
 	),
 
@@ -50,7 +50,7 @@ config = dict(
 		pct_start        = 0.133,
 		div_factor       = 25,
 		epochs           = None,
-		steps_per_epoch  = 391,
+		steps_per_epoch  = 99,
 		final_div_factor = 1e4
 	),
 
@@ -80,7 +80,7 @@ config = dict(
 	),
 
 	trainloader = dict(
-		batch_size     = 256,
+		batch_size     = 512,
 		shuffle        = False, 
 		num_workers    = 2,
 		pin_memory     = True,
@@ -115,9 +115,8 @@ assert config["dataset"] in ["CIFAR100", "TinyImageNet", "ImageNetSketch"]
 
 if config["dataset"] == "CIFAR100": 
 
-	config["expert"]["num_classes"]       = 100
-	config["linear_teacher"]["n_outputs"] = 100
-	config["conv_teacher"]["n_outputs"]   = 100
+	config["teacher"]["n_outputs"]  = 100
+	config["expert"]["num_classes"] = 100
 
 	if config["advanced"] == False:
 		config["expert"]["model_name"] = "resnet18"
@@ -126,9 +125,8 @@ if config["dataset"] == "CIFAR100":
 
 elif config["dataset"] == "TinyImageNet": 
 
-	config["expert"]["num_classes"]       = 200
-	config["linear_teacher"]["n_outputs"] = 200
-	config["conv_teacher"]["n_outputs"]   = 200
+	config["teacher"]["n_outputs"]  = 200
+	config["expert"]["num_classes"] = 200
 
 	if config["advanced"] == False:
 		config["expert"]["model_name"] = "tf_efficientnet_b0.in1k"
@@ -136,9 +134,9 @@ elif config["dataset"] == "TinyImageNet":
 		config["expert"]["model_name"] = "swinv2_tiny_window8_256.ms_in1k"
 
 else: 
-	config["expert"]["num_classes"]       = 1000
-	config["linear_teacher"]["n_outputs"] = 1000
-	config["conv_teacher"]["n_outputs"]   = 1000
+
+	config["teacher"]["n_outputs"]  = 1000
+	config["expert"]["num_classes"] = 1000
 
 	if config["advanced"] == False:
 		config["expert"]["model_name"] = "seresnext26t_32x4d"

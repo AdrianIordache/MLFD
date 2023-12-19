@@ -6,61 +6,51 @@ from config_file   import *
 from procedures    import train, validate
 
 def run():
-    CFG = teacher_config
+    CFG = config
     seed_everything(SEED)
 
-    train_df = pol.read_csv(f"./embeddings/{CFG['dataset']}_train_embeddings.csv")
-    test_df  = pol.read_csv(f"./embeddings/{CFG['dataset']}_test_embeddings.csv")
+    PATH_TO_TRAIN_EMBEDDINGS = f"./embeddings/stage-1/{CFG['dataset']}/train/"
+    PATH_TO_TEST_EMBEDDINGS  = f"./embeddings/stage-1/{CFG['dataset']}/test/"
 
-    features = [f"cifar_x{i}" for i in range(0, 2048)] + \
-               [f"tiny_imagenet_x{i}" for i in range(0, 2048)] + \
-               [f"imagenet_sketch_x{i}" for i in range(0, 2048)]
+    PATH_TO_TRAIN_SAMPLES = os.path.join(PATH_TO_TRAIN_EMBEDDINGS, f"{CFG['e_size']}x{CFG['e_size']}")
+    PATH_TO_TEST_SAMPLES  = os.path.join(PATH_TO_TEST_EMBEDDINGS,  f"{CFG['e_size']}x{CFG['e_size']}")
 
-    X_train = train_df[features].to_numpy()
-    X_test  =  test_df[features].to_numpy()
+    PATH_TO_TRAIN_LABELS  = os.path.join(PATH_TO_TRAIN_EMBEDDINGS, f"{CFG['dataset']}_train_labels.npy")
+    PATH_TO_TEST_LABELS   = os.path.join(PATH_TO_TEST_EMBEDDINGS,  f"{CFG['dataset']}_test_labels.npy")
 
-    y_train = train_df["label"].to_numpy()
-    y_test  =  test_df["label"].to_numpy()
-
-    X_train = torch.tensor(X_train, dtype = torch.float32)
-    y_train = torch.tensor(y_train, dtype = torch.long)
-
-    X_test  = torch.tensor(X_test, dtype = torch.float32)
-    y_test  = torch.tensor(y_test, dtype = torch.long)
-
-    trainset = TensorDataset(X_train, y_train)
-    testset  = TensorDataset(X_test,  y_test)
+    trainset = TeacherDataset(PATH_TO_TRAIN_SAMPLES, PATH_TO_TRAIN_LABELS, **CFG["n_features_maps"])
+    testset  = TeacherDataset(PATH_TO_TEST_SAMPLES, PATH_TO_TEST_LABELS, **CFG["n_features_maps"])
 
     trainloader = DataLoader(trainset, **CFG["trainloader"])
     testloader  = DataLoader(testset, **CFG["testloader"])
 
-    model = nn.Sequential(OrderedDict([
-            ('dropout',    nn.Dropout(p = CFG["p_dropout"])),
-            ('projection', nn.Linear(X_train.shape[1], CFG["n_outputs"]))
-        ])
-    )
-    CFG["model"] = model
+    model = S28Teacher({**CFG["teacher"], **CFG["n_features_maps"]})
     model.to(DEVICE)
 
     optimizer = get_optimizer(model.parameters(), CFG)
     scheduler = get_scheduler(optimizer, CFG)
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.CrossEntropyLoss(label_smoothing = CFG["label_smoothing"])
+
+    # image, _ = next(iter(trainloader))
+    # model(image.to(DEVICE))
 
     if USE_WANDB: 
-        wandb.init(project = f"{CFG['dataset']}-Training", config = CFG)
+        wandb.init(project = f"{CFG['dataset']}-Training", name = RUN_NAME, config = CFG)
 
     best_model, best_accuracy, best_epoch = None, 0, None
     for epoch in range(CFG["epochs"]):
-        train_top1_acc = train(model, trainloader, optimizer, scheduler, criterion, epoch)
+        train_top1_acc = train(model, trainloader, optimizer, scheduler, criterion, epoch, None)
         valid_top1_acc = validate(model, testloader, criterion)
 
         if valid_top1_acc > best_accuracy:
             best_model    = copy.deepcopy(model)
-            best_accuracy = np.round(valid_top1_acc, 2)
+            best_accuracy = np.round(valid_top1_acc, 3)
             best_epoch    = epoch
 
-    if USE_WANDB: 
-        torch.save(best_model.state_dict(), f"./weights/teachers/{CFG['dataset']}/{wandb.run.name}_epoch_{best_epoch}_acc@1_{np.round(best_accuracy, 2)}.pt")
+    if USE_WANDB:     
+        # PATH_TO_SAVED_MODEL = f"./weights/teachers/stage-3/{CFG['dataset']}"
+        # os.makedirs(PATH_TO_SAVED_MODEL, exist_ok = True)
+        # torch.save(best_model.state_dict(), f"{PATH_TO_SAVED_MODEL}/{RUN_NAME}_epoch_{best_epoch}_acc@1_{best_accuracy}.pt")
         wandb.finish()
 
 if __name__ == "__main__":

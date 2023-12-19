@@ -3,7 +3,6 @@ from models        import *
 from dataset       import *
 from labels        import *
 from procedures    import evaluate
-from preprocessing import load_cifar
 
 CFG = dict(
     CIFAR100 = dict(
@@ -25,7 +24,7 @@ CFG = dict(
     ),
 
     loader = dict(
-        batch_size     = 768,
+        batch_size     = 1,
         shuffle        = False, 
         num_workers    = 4,
         pin_memory     = True,
@@ -93,9 +92,9 @@ def get_activation(name, out_dict):
     return hook
 
 if __name__ == "__main__":
-    PATH_TO_CIFAR100_MODEL        = "./weights/students/cifar100/exp-6-identity-2048.pt"
-    PATH_TO_TINY_IMAGENET_MODEL   = "./weights/students/tiny-imagenet/exp-9-identity-2048.pt"
-    PATH_TO_IMAGENET_SKETCH_MODEL = "./weights/students/imagenet-sketch/exp-6-identity-2048.pt"
+    PATH_TO_CIFAR100_MODEL        = "./weights/experts/stage-1/CIFAR100/exp-6-identity-2048.pt"
+    PATH_TO_TINY_IMAGENET_MODEL   = "./weights/experts/stage-1/TinyImageNet/exp-9-identity-2048.pt"
+    PATH_TO_IMAGENET_SKETCH_MODEL = "./weights/experts/stage-1/ImageNetSketch/exp-6-identity-2048.pt"
 
     cifar100_outputs, tiny_imagenet_outputs, imagenet_sketch_outputs = {}, {}, {}
 
@@ -103,131 +102,199 @@ if __name__ == "__main__":
     CIFAR100Model.load_state_dict(torch.load(PATH_TO_CIFAR100_MODEL))
     CIFAR100Model.eval()
 
-    # CIFAR100Model.model.layer2.register_forward_hook(get_activation('size_28',      cifar100_outputs))
-    # CIFAR100Model.model.layer3.register_forward_hook(get_activation('size_14',      cifar100_outputs))
-    CIFAR100Model.model.layer4.register_forward_hook(get_activation('size_7',       cifar100_outputs))
-    # CIFAR100Model.intermediate.register_forward_hook(get_activation('intermediate', cifar100_outputs))
+    CIFAR100Model.model.layer2.register_forward_hook(get_activation('size_28', cifar100_outputs))
+    CIFAR100Model.model.layer3.register_forward_hook(get_activation('size_14', cifar100_outputs))
+    CIFAR100Model.model.layer4.register_forward_hook(get_activation('size_7',  cifar100_outputs))
+    CIFAR100Model.intermediate.register_forward_hook(get_activation('size_1',  cifar100_outputs))
 
     TinyImageNetModel = IntermediateModel(CFG["TinyImageNet"], CFG["n_embedding"], CFG["activation"]).to(DEVICE)
     TinyImageNetModel.load_state_dict(torch.load(PATH_TO_TINY_IMAGENET_MODEL))
     TinyImageNetModel.eval()
 
-    # TinyImageNetModel.model.blocks[2].register_forward_hook(get_activation('size_28',   tiny_imagenet_outputs))
-    # TinyImageNetModel.model.blocks[4].register_forward_hook(get_activation('size_14',   tiny_imagenet_outputs))
-    TinyImageNetModel.model.conv_head.register_forward_hook(get_activation('size_7',    tiny_imagenet_outputs))
-    # TinyImageNetModel.intermediate.register_forward_hook(get_activation('intermediate', tiny_imagenet_outputs))
+    TinyImageNetModel.model.blocks[2].register_forward_hook(get_activation('size_28', tiny_imagenet_outputs))
+    TinyImageNetModel.model.blocks[4].register_forward_hook(get_activation('size_14', tiny_imagenet_outputs))
+    TinyImageNetModel.model.conv_head.register_forward_hook(get_activation('size_7',  tiny_imagenet_outputs))
+    TinyImageNetModel.intermediate.register_forward_hook(get_activation('size_1',     tiny_imagenet_outputs))
 
     ImageNetSketchModel = IntermediateModel(CFG["ImageNetSketch"], CFG["n_embedding"], CFG["activation"]).to(DEVICE)
     ImageNetSketchModel.load_state_dict(torch.load(PATH_TO_IMAGENET_SKETCH_MODEL))
     ImageNetSketchModel.eval()
     
-    # ImageNetSketchModel.model.layer2.register_forward_hook(get_activation('size_28',      tiny_imagenet_outputs))
-    # ImageNetSketchModel.model.layer3.register_forward_hook(get_activation('size_14',      imagenet_sketch_outputs))
-    ImageNetSketchModel.model.layer4.register_forward_hook(get_activation('size_7',       imagenet_sketch_outputs))
-    # ImageNetSketchModel.intermediate.register_forward_hook(get_activation('intermediate', imagenet_sketch_outputs))
+    ImageNetSketchModel.model.layer2.register_forward_hook(get_activation('size_28', imagenet_sketch_outputs))
+    ImageNetSketchModel.model.layer3.register_forward_hook(get_activation('size_14', imagenet_sketch_outputs))
+    ImageNetSketchModel.model.layer4.register_forward_hook(get_activation('size_7',  imagenet_sketch_outputs))
+    ImageNetSketchModel.intermediate.register_forward_hook(get_activation('size_1',  imagenet_sketch_outputs))
 
 
-    for data_type in ["TinyImageNet"]: # "CIFAR100", "TinyImageNet", "ImageNetSketch"
+    for data_type in ["CIFAR100", "TinyImageNet", "ImageNetSketch"]: # "CIFAR100", "TinyImageNet", "ImageNetSketch"
         trainset, testset = get_datasets(data_type, CFG)
 
         trainloader = DataLoader(trainset, **CFG["loader"])
         testloader  = DataLoader(testset, **CFG["loader"])
 
         for (mode, loader) in [("train", trainloader), ("test", testloader)]:
-            if mode == "train":
-                len_dataset = len(trainset)
-            else: 
-                len_dataset = len(testset)
-
-            # outputs = {
-            #     "CIFAR100": {
-            #         # "size_28"      : np.zeros((len_dataset, 128, 28, 28)),
-            #         # "size_14"      : np.zeros((len_dataset, 256, 14, 14)),
-            #         # "size_7"       : np.zeros((len_dataset, 512, 7, 7)),
-            #         # "intermediate" : np.zeros((len_dataset, 2048)),
-            #     },
-            #     "TinyImageNet": {
-            #         # "size_28"      : np.zeros((len_dataset, 40, 28, 28)),
-            #         # "size_14"      : np.zeros((len_dataset, 112, 14, 14)),
-            #         # "size_7"       : np.zeros((len_dataset, 1280, 7, 7)),
-            #         # "intermediate" : np.zeros((len_dataset, 2048)),
-            #     },
-            #     "ImageNetSketch": {
-            #         # "size_28"      : np.zeros((len_dataset, 512, 28, 28)),
-            #         # "size_14"      : np.zeros((len_dataset, 1024, 14, 14)),
-            #         # "size_7"       : np.zeros((len_dataset, 2048, 7, 7)),
-            #         # "intermediate" : np.zeros((len_dataset, 2048)),
-            #     },
-            #     "labels": np.zeros((len_dataset, 1))
-            # }
-
-            # cifar100_maps        = np.zeros((len_dataset, 512, 7, 7))
-            # tiny_imagenet_maps   = np.zeros((len_dataset, 1280, 7, 7))
-            # imagenet_sketch_maps = np.zeros((len_dataset, 2048, 7, 7))
-            # labels               = np.zeros((len_dataset,))
-
-            cifar100_maps, tiny_imagenet_maps, imagenet_sketch_maps, labels = [], [], [], []
-
+            counter = 0
             start = end = time.time()
-            for batch_idx, (images, labels_) in enumerate(loader):
-                images  = images.to(DEVICE)
-                labels_ = labels_.cpu().numpy()
 
-                # batch_size = images.shape[0]
-                with torch.no_grad():
-                    _  = CIFAR100Model(images).cpu().detach().numpy()
-                    _  = TinyImageNetModel(images).cpu().detach().numpy()
-                    _  = ImageNetSketchModel(images).cpu().detach().numpy()
+            PATH_TO_EMBEDDINGS = f"./embeddings/stage-3/{data_type}/{mode}"
+            os.makedirs(PATH_TO_EMBEDDINGS, exist_ok = True)
 
-                # outputs["CIFAR100"]["size_28"][batch_idx * batch_size : (batch_idx + 1) * batch_size, :, :, :]       = cifar100_outputs["size_28"].cpu().detach().numpy()
-                # outputs["TinyImageNet"]["size_28"][batch_idx * batch_size : (batch_idx + 1) * batch_size, :, :, :]   = tiny_imagenet_outputs["size_28"].cpu().detach().numpy()
-                # outputs["ImageNetSketch"]["size_28"][batch_idx * batch_size : (batch_idx + 1) * batch_size, :, :, :] = tiny_imagenet_outputs["size_28"].cpu().detach().numpy()
+            PATHS = {}
+            for size in [1, 7, 14, 28]:
+                PATHS[f"size_{size}"] = f"{PATH_TO_EMBEDDINGS}/{size}x{size}/"
+                os.makedirs(PATHS[f"size_{size}"], exist_ok = True)
 
-                # outputs["CIFAR100"]["size_14"][batch_idx * batch_size : (batch_idx + 1) * batch_size, :, :, :]       = cifar100_outputs["size_14"].cpu().detach().numpy()
-                # outputs["TinyImageNet"]["size_14"][batch_idx * batch_size : (batch_idx + 1) * batch_size, :, :, :]   = tiny_imagenet_outputs["size_14"].cpu().detach().numpy()
-                # outputs["ImageNetSketch"]["size_14"][batch_idx * batch_size : (batch_idx + 1) * batch_size, :, :, :] = imagenet_sketch_outputs["size_14"].cpu().detach().numpy()
+            labels = []
+            for batch_idx, (image, label) in enumerate(loader):
+                image = image.to(DEVICE)
+    
+                label = label.item()
+                labels.append(label)
 
-                # outputs["CIFAR100"]["size_7"][batch_idx * batch_size : (batch_idx + 1) * batch_size, :, :, :]        = cifar100_outputs["size_7"].cpu().detach().numpy()
-                # outputs["TinyImageNet"]["size_7"][batch_idx * batch_size : (batch_idx + 1) * batch_size, :, :, :]    = tiny_imagenet_outputs["size_7"].cpu().detach().numpy()
-                # outputs["ImageNetSketch"]["size_7"][batch_idx * batch_size : (batch_idx + 1) * batch_size, :, :, :]  = imagenet_sketch_outputs["size_7"].cpu().detach().numpy()
+                # with torch.no_grad():
+                #     _  = CIFAR100Model(image).cpu().detach().numpy()
+                #     _  = TinyImageNetModel(image).cpu().detach().numpy()
+                #     _  = ImageNetSketchModel(image).cpu().detach().numpy()
 
-                # outputs["CIFAR100"]["intermediate"][batch_idx * batch_size : (batch_idx + 1) * batch_size, :]        = cifar100_outputs["intermediate"].cpu().detach().numpy()
-                # outputs["TinyImageNet"]["intermediate"][batch_idx * batch_size : (batch_idx + 1) * batch_size, :]    = tiny_imagenet_outputs["intermediate"].cpu().detach().numpy()
-                # outputs["ImageNetSketch"]["intermediate"][batch_idx * batch_size : (batch_idx + 1) * batch_size, :]  = imagenet_sketch_outputs["intermediate"].cpu().detach().numpy()
+                # embeddings = {
+                #     "image" : image.cpu().detach().numpy(),
+                #     "label" : label.cpu().detach().numpy(),
 
-                # cifar100_maps[batch_idx * batch_size : (batch_idx + 1) * batch_size, :, :, :]        = cifar100_outputs["size_7"].cpu().detach().numpy()
-                # tiny_imagenet_maps[batch_idx * batch_size : (batch_idx + 1) * batch_size, :, :, :]   = tiny_imagenet_outputs["size_7"].cpu().detach().numpy()
-                # imagenet_sketch_maps[batch_idx * batch_size : (batch_idx + 1) * batch_size, :, :, :] = imagenet_sketch_outputs["size_7"].cpu().detach().numpy()
-                # labels[batch_idx * batch_size : (batch_idx + 1) * batch_size] = labels_
+                #     "CIFAR100" : {
+                #         "size_28" : cifar100_outputs["size_28"].cpu().detach().numpy(),
+                #         "size_14" : cifar100_outputs["size_14"].cpu().detach().numpy(),
+                #         "size_7"  : cifar100_outputs["size_7"].cpu().detach().numpy(),
+                #         "size_1"  : cifar100_outputs["size_1"].cpu().detach().numpy().squeeze(0),
+                #     },
 
-                cifar100_maps.extend(cifar100_outputs["size_7"].cpu().detach().numpy())
-                tiny_imagenet_maps.extend(tiny_imagenet_outputs["size_7"].cpu().detach().numpy())
-                imagenet_sketch_maps.extend(imagenet_sketch_outputs["size_7"].cpu().detach().numpy())
-                labels.extend(labels_)
+                #     "TinyImageNet" : {
+                #         "size_28" : tiny_imagenet_outputs["size_28"].cpu().detach().numpy(),
+                #         "size_14" : tiny_imagenet_outputs["size_14"].cpu().detach().numpy(),
+                #         "size_7"  : tiny_imagenet_outputs["size_7"].cpu().detach().numpy(),
+                #         "size_1"  : tiny_imagenet_outputs["size_1"].cpu().detach().numpy(),
+                #     },
 
-                end = time.time()
-                if (batch_idx + 1) % CFG['print_freq'] == 0 or (batch_idx + 1) == len(loader):
-                    message = f"[G] B: [{batch_idx + 1}/{len(loader)}], " + \
-                              f"{time_since(start, float(batch_idx + 1) / len(loader))}"
+                #     "ImageNetSketch" : {
+                #         "size_28" : imagenet_sketch_outputs["size_28"].cpu().detach().numpy(),
+                #         "size_14" : imagenet_sketch_outputs["size_14"].cpu().detach().numpy(),
+                #         "size_7"  : imagenet_sketch_outputs["size_7"].cpu().detach().numpy(),
+                #         "size_1"  : imagenet_sketch_outputs["size_1"].cpu().detach().numpy(),
+                #     }
+                # }
 
-                    print(message)
+                # sample = {}
+                # for size in [1, 7, 14, 28]:
+                #     c_size = cifar100_outputs[f"size_{size}"].cpu().detach().squeeze(0).shape[0]
+                #     t_size = tiny_imagenet_outputs[f"size_{size}"].cpu().detach().squeeze(0).shape[0]
+                #     s_size = imagenet_sketch_outputs[f"size_{size}"].cpu().detach().squeeze(0).shape[0]
 
-            cifar100_maps        = np.array(cifar100_maps)
-            tiny_imagenet_maps   = np.array(tiny_imagenet_maps) 
-            imagenet_sketch_maps = np.array(imagenet_sketch_maps)
-            labels               = np.array(labels)
+                #     sample[f"size_{size}"] = torch.cat((
+                #         cifar100_outputs[f"size_{size}"].cpu().detach().squeeze(0),
+                #         tiny_imagenet_outputs[f"size_{size}"].cpu().detach().squeeze(0),
+                #         imagenet_sketch_outputs[f"size_{size}"].cpu().detach().squeeze(0),
+                #     ), dim = 0).numpy()
 
-            with open(f"./embeddings/stage-2/{data_type}-7x7/{mode}_{data_type}_dataset_CIFAR100_model_512x7x7.npy", 'wb') as fp:
-                  np.save(fp, cifar100_maps)
+                #     with open(f"{PATHS[f'size_{size}']}/sample_{c_size}x{t_size}x{s_size}_{counter}.npy", "wb") as handler:
+                #         np.save(handler, sample[f"size_{size}"])
 
-            with open(f"./embeddings/stage-2/{data_type}-7x7/{mode}_{data_type}_dataset_TinyImageNet_model_1280x7x7.npy", 'wb') as fp:
-                  np.save(fp, tiny_imagenet_maps)
+                # counter += 1
 
-            with open(f"./embeddings/stage-2/{data_type}-7x7/{mode}_{data_type}_dataset_ImageNetSketch_model_2048x7x7.npy", 'wb') as fp:
-                  np.save(fp, imagenet_sketch_maps)
+                # end = time.time()
+                # if (batch_idx + 1) % CFG['print_freq'] == 0 or (batch_idx + 1) == len(loader):
+                #     message = f"[G] B: [{batch_idx + 1}/{len(loader)}], " + \
+                #               f"{time_since(start, float(batch_idx + 1) / len(loader))}"
 
-            with open(f"./embeddings/stage-2/{data_type}-7x7/{mode}_{data_type}_labels.npy", 'wb') as fp:
-                  np.save(fp, labels)
+                #     print(message)
+
+            labels = np.array(labels)
+            with open(f"{PATH_TO_EMBEDDINGS}/{data_type}_{mode}_labels.npy", "wb") as handler:
+                np.save(handler, labels)
+
+# def get_tensor_shape(dataloader, models, outputs, model_key, size):
+#     image, _ = next(iter(dataloader))
+#     image    = image.to(DEVICE)
+#     _        = models[model_key](image)
+#     tensor   = outputs[model_key][f"size_{size}"]
+#     return tensor.shape
+# 
+#     MODELS = {
+#         "CIFAR100"       : CIFAR100Model,
+#         "TinyImageNet"   : TinyImageNetModel,
+#         "ImageNetSketch" : ImageNetSketchModel
+#     }
+
+#     OUTPUTS = {
+#         "CIFAR100"       : cifar100_outputs,
+#         "TinyImageNet"   : tiny_imagenet_outputs,
+#         "ImageNetSketch" : imagenet_sketch_outputs
+#     }
+
+#     BS = CFG["loader"]["batch_size"]
+#         for (mode, loader) in [("TRAIN", trainloader)]: # , ("TEST", testloader)]:
+#             if mode == "TRAIN":
+#                 len_dataset = len(trainset)
+#             else: 
+#                 len_dataset = len(testset)
+
+#             labels = np.zeros((len_dataset, ), dtype = np.float16)
+#             for batch_idx, (_, labels_) in enumerate(loader):
+#                 labels_ = labels_.cpu().numpy()
+#                 curr_bs = labels_.shape[0]
+#                 step_bs = batch_idx * BS
+                
+#                 labels[step_bs : step_bs + curr_bs] = labels_
+
+#             PATH_TO_EMBEDDINGS_BASE = f"./embeddings/stage-2/{data_type}"
+#             os.makedirs(PATH_TO_EMBEDDINGS_BASE, exist_ok = True)
+
+#             labels = np.array(labels)
+#             with open(f"{PATH_TO_EMBEDDINGS_BASE}/{mode}_{data_type}_labels.npy", 'wb') as fp:
+#                 np.save(fp, labels)
+
+#             del labels
+#             gc.collect()
+
+#             for size in [14]: # [1, 7, 14]
+#                 for model_key in ["ImageNetSketch"]:
+
+#                     _, c, w, h = get_tensor_shape(copy.deepcopy(loader), MODELS, OUTPUTS, model_key, size)
+                    
+#                     maps = np.zeros((len_dataset, c, w, h), dtype = np.float16)
+#                     print(maps.shape)
+
+#                     start = end = time.time()
+#                     for batch_idx, (images, _) in enumerate(loader):
+#                         images  = images.to(DEVICE)
+
+#                         curr_bs = images.shape[0]
+#                         step_bs = batch_idx * BS
+
+#                         with torch.no_grad():
+#                             _  = MODELS[model_key](images).cpu().detach().numpy()
+
+#                         maps[step_bs : step_bs + curr_bs, :, :, :] = OUTPUTS[model_key][f"size_{size}"].cpu().detach().numpy()
+                     
+#                         end = time.time()
+#                         if (batch_idx + 1) % CFG['print_freq'] == 0 or (batch_idx + 1) == len(loader):
+#                             message = f"[G] D/T/M/S/B: [{data_type}][{mode}][S-{size}][{model_key}][{batch_idx + 1}/{len(loader)}], " + \
+#                                       f"{time_since(start, float(batch_idx + 1) / len(loader))}"
+
+#                             print(message)
+
+#                     PATH_TO_EMBEDDINGS_MAPS = f"{PATH_TO_EMBEDDINGS_BASE}/{size}x{size}"
+#                     os.makedirs(PATH_TO_EMBEDDINGS_MAPS, exist_ok = True)
+
+#                     maps = np.array(maps)
+#                     with open(f"{PATH_TO_EMBEDDINGS_MAPS}/{mode}_dataset_{data_type}_model_{model_key}_{c}x{size}x{size}.npy", 'wb') as fp:
+#                           np.save(fp, maps)
+
+#                     del maps
+#                     free_gpu_memory(DEVICE)
+#                     gc.collect()
+
+
+
+
 
 
 

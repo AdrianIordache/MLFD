@@ -104,6 +104,35 @@ class ImageNetDataset(Dataset):
         else:
             return image.float(), label.long()
 
+class TeacherDataset(Dataset):
+    def __init__(self, path_to_samples, path_to_labels, nf_c, nf_t, nf_s):
+        super().__init__()
+        self.path_to_samples = path_to_samples
+        self.path_to_labels  = path_to_labels
+
+        self.labels = np.load(self.path_to_labels)
+        
+        self.nf_c = nf_c
+        self.nf_t = nf_t
+        self.nf_s = nf_s
+
+    def __len__(self):
+        return len(self.labels)
+
+    def __getitem__(self, ix):
+        path_to_sample = os.path.join(
+            self.path_to_samples, 
+            f"sample_{self.nf_c}x{self.nf_t}x{self.nf_s}_{ix}.npy"
+        )
+
+        sample = np.load(path_to_sample)
+        label  = self.labels[ix]
+
+        sample = torch.tensor(sample)
+        label  = torch.tensor(label)
+    
+        return sample.float(), label.long()
+
 def get_dataloaders(config, distillation = False):
     trainset, testset = None, None
     train_c_data, train_t_data, train_s_data, train_c_labels = None, None, None, None
