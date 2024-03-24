@@ -3,17 +3,17 @@ from dataset       import *
 from labels        import *
 from models        import *
 from config_file   import *
-from procedures    import train, validate, train_kd
-from preprocessing import load_cifar
+from procedures    import train, validate, train_kd_conv, train_kd
 
 class KnowledgeDistillationLoss(nn.Module):
-    def __init__(self, distillation_loss, temperature = 5, kd_alpha = 0.5):
+    def __init__(self, distillation_loss, feature_map_loss, temperature = 5, kd_coefs = 0.5):
         super(KnowledgeDistillationLoss, self).__init__()
         self.distillation_loss = distillation_loss
+        self.feature_map_loss  = feature_map_loss
         self.temperature       = temperature
-        self.kd_alpha          = kd_alpha
+        self.kd_coefs          = kd_coefs
 
-    def forward(self, student_logits, teacher_logits, labels):
+    def forward(self, student_logits, teacher_logits, labels, student_maps = None, teacher_maps = None):
         softmax       = nn.Softmax(dim = 1)
         log_softmax   = nn.LogSoftmax(dim = 1)
         cross_entropy = nn.CrossEntropyLoss()
@@ -23,92 +23,57 @@ class KnowledgeDistillationLoss(nn.Module):
 
         dist_loss = self.distillation_loss(student_probs, teacher_probs) * (self.temperature ** 2)
         ce_loss   = cross_entropy(student_logits, labels)
-        
-        return self.kd_alpha * dist_loss + (1.0 - self.kd_alpha) * ce_loss
 
+        if student_maps is not None and teacher_maps is not None:
+            # print("loss_bu")
+            maps_loss = self.feature_map_loss(student_maps, teacher_maps)
+            return self.kd_coefs[0] * dist_loss + self.kd_coefs[1] * maps_loss + self.kd_coefs[2] * ce_loss
+        
+        return self.kd_coefs[0] * dist_loss + self.kd_coefs[1] * ce_loss
+
+# student_maps = torch.permute(student_maps, (0, 3, 1, 2))
 def run():
-    CFG = student_config
+    CFG = config
     seed_everything(SEED)
 
-    PATH_TO_TRAIN_EMBEDDINGS = f"./embeddings/{teacher_config['dataset']}_train_embeddings.csv"
-    PATH_TO_TEST_EMBEDDINGS  = f"./embeddings/{teacher_config['dataset']}_train_embeddings.csv"
+    # DEVICE = torch.device('cpu')
+    teacher = S7Teacher({**CFG["teacher"], **CFG["n_features_maps"]})
 
-    teacher = nn.Sequential(OrderedDict([
-            ('dropout',    nn.Dropout(p = teacher_config["p_dropout"])),
-            ('projection', nn.Linear(6144, teacher_config["n_outputs"]))
-        ])
-    )
-
-    teacher.load_state_dict(torch.load(f"/usr/app/weights/teachers/{teacher_config['dataset']}/earnest-jazz-10_epoch_26_acc@1_0.47.pt"))
+    # f"./weights/teachers/stage-3/CIFAR100/exp-19-teacher-8_epoch_202_acc@1_0.715.pt"
+    # f"./weights/teachers/stage-3/CIFAR100/exp-18-teacher-1_epoch_421_acc@1_0.678.pt
+    # f"./weights/teachers/stage-3/TinyImageNet/exp-28-teacher-1_epoch_462_acc@1_0.642.pt"
+    # f"./weights/teachers/stage-3/TinyImageNet/exp-29-teacher-8_epoch_126_acc@1_0.655.pt"
+    # f"./weights/teachers/stage-3/ImageNetSketch/exp-16-teacher-1_epoch_1657_acc@1_0.684.pt" # exp-4-teacher-p3_epoch_251_acc@1_0.573.pt
+    teacher.load_state_dict(torch.load(f"./weights/teachers/stage-4/{CFG['dataset']}/exp-4-teacher-p3_epoch_251_acc@1_0.573.pt"))
     teacher.to(DEVICE)
     teacher.eval()
 
-    if teacher_config['dataset'] == "CIFAR100":
-        means, stds = CIFAR_MEANS, CIFAR_STDS
-    else:
-        means, stds = IMAGENET_MEANS, IMAGENET_STDS
+    trainloader, testloader = get_dataloaders_advanced(CFG, distillation = True)
+    mixup_fn = None if CFG["use_mixup"] == False else Mixup(**CFG['mixup_param'])
 
-    train_transforms = T.Compose([
-        T.ToPILImage(),
-        T.Resize((CFG["image_size"], CFG["image_size"])),
-        ] + CFG['train_transforms'] + [
-        T.ToTensor(),
-        T.Normalize(means, stds)
-    ])
-
-    test_transforms = T.Compose([
-        T.ToPILImage(),
-        T.Resize((CFG["image_size"], CFG["image_size"])),
-        ] + CFG['test_transforms'] + [
-        T.ToTensor(),
-        T.Normalize(means, stds)
-    ])
-
-    trainset, testset = None, None
-
-    if teacher_config['dataset'] == "CIFAR100":
-        train_images, train_labels = load_cifar(PATH_TO_CIFAR_TRAIN)
-        test_images,  test_labels  = load_cifar(PATH_TO_CIFAR_TEST)
-
-        trainset = CIFAR100Dataset(train_images, train_labels, train_transforms, PATH_TO_TRAIN_EMBEDDINGS)
-        testset  = CIFAR100Dataset(test_images, test_labels, test_transforms)
-
-    if teacher_config['dataset'] == "TinyImageNet":
-        train_tiny_imagenet = pd.read_csv(PATH_TO_TINY_IMAGENET_TRAIN)
-        test_tiny_imagenet  = pd.read_csv(PATH_TO_TINY_IMAGENET_TEST)
-        
-        trainset = ImageNetDataset(train_tiny_imagenet, train_transforms, PATH_TO_TRAIN_EMBEDDINGS)
-        testset  = ImageNetDataset(test_tiny_imagenet, test_transforms)
-        
-    if teacher_config['dataset'] == "ImageNetSketch":
-        train_imagenet_sketch = pd.read_csv(PATH_TO_IMAGENET_SKETCH_TRAIN)
-        test_imagenet_sketch  = pd.read_csv(PATH_TO_IMAGENET_SKETCH_TEST)
-        
-        trainset = ImageNetDataset(train_imagenet_sketch, train_transforms, PATH_TO_TRAIN_EMBEDDINGS)
-        testset  = ImageNetDataset(test_imagenet_sketch, test_transforms)
-        
-    trainloader = DataLoader(trainset, **CFG["trainloader"])
-    testloader  = DataLoader(testset, **CFG["testloader"])
-
-    student = IntermediateModel(CFG["model"], CFG["n_embedding"], CFG["activation"])
+    student = ExpertModel(CFG["expert"], CFG["n_embedding"], CFG["activation"])
     student.to(DEVICE)
+    # print(student)
 
-    optimizer    = get_optimizer(student.parameters(), CFG)
-    scheduler    = get_scheduler(optimizer, CFG)
-    criterion    = nn.CrossEntropyLoss()
+    optimizer   = get_optimizer(student.parameters(), CFG)
+    scheduler   = get_scheduler(optimizer, CFG)
+    v_criterion = nn.CrossEntropyLoss(label_smoothing = CFG["label_smoothing"])
+    scaler      = torch.cuda.amp.GradScaler() if CFG["mixed_precision"] else None
+
     criterion_kd = KnowledgeDistillationLoss(
         distillation_loss = CFG["distillation_loss"],
+        feature_map_loss  = CFG["feature_map_loss"],
         temperature       = CFG["temperature"],
-        kd_alpha          = CFG["kd_alpha"]
+        kd_coefs          = CFG["kd_coefs"]
     )
 
     if USE_WANDB: 
-        wandb.init(project = f"{teacher_config['dataset']}-Training", config = CFG)
+        wandb.init(project = f"{CFG['dataset']}-Training", name = RUN_NAME, config = CFG)
 
     best_model, best_accuracy, best_epoch = None, 0, None
     for epoch in range(CFG["epochs"]):
-        train_top1_acc = train_kd(student, teacher, trainloader, optimizer, scheduler, criterion_kd, epoch)
-        valid_top1_acc = validate(student, testloader, criterion)
+        train_top1_acc = train_kd(student, teacher, trainloader, optimizer, scheduler, criterion_kd, epoch, scaler, CFG)
+        valid_top1_acc = validate(student, testloader, v_criterion, CFG)
 
         if valid_top1_acc > best_accuracy:
             best_model    = copy.deepcopy(student)
@@ -116,7 +81,7 @@ def run():
             best_epoch    = epoch
 
     if USE_WANDB: 
-        torch.save(best_model.state_dict(), f"./weights/experts/{teacher_config['dataset']}/{wandb.run.name}_epoch_{best_epoch}_acc@1_{np.round(best_accuracy, 2)}.pt")
+        torch.save(best_model.state_dict(), f"./weights/students/stage-4/{CFG['dataset']}/{RUN_NAME}_epoch_{best_epoch}_acc@1_{np.round(best_accuracy, 3)}.pt")
         wandb.finish()
 
 if __name__ == "__main__":

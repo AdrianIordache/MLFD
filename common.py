@@ -7,6 +7,7 @@ import copy
 import wandb
 import pickle
 import random
+import scipy.io
 import numpy as np
 import pandas as pd
 import polars as pol
@@ -18,17 +19,20 @@ import torch.optim as optim
 
 from PIL import Image
 from typing import List
+from itertools import cycle
 from IPython.display import display
 from collections import OrderedDict
 from torchvision import datasets, transforms
 from albumentations.pytorch import ToTensorV2
 from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset, DataLoader, TensorDataset
 from torchvision.transforms.autoaugment import AutoAugmentPolicy
 from torch.optim.lr_scheduler import CosineAnnealingLR, CosineAnnealingWarmRestarts, OneCycleLR
 
 import timm
 import torchvision
+
 import albumentations as A
 import torchvision.transforms as T
 
@@ -74,6 +78,18 @@ PATH_TO_TINY_IMAGENET_TEST  = "./data/tiny-imagenet-200/valid.csv"
 
 PATH_TO_IMAGENET_SKETCH_TRAIN = "./data/imagenet-sketch/train.csv"
 PATH_TO_IMAGENET_SKETCH_TEST  = "./data/imagenet-sketch/valid.csv"
+
+PATH_TO_CALTECH_TRAIN = "./data/caltech-101/train.csv"
+PATH_TO_CALTECH_TEST  = "./data/caltech-101/valid.csv"
+
+PATH_TO_FLOWERS_TRAIN = "./data/flowers-102/train.csv"
+PATH_TO_FLOWERS_TEST  = "./data/flowers-102/valid.csv"
+
+PATH_TO_CUB200_TRAIN = "./data/cub-200-2011/train.csv"
+PATH_TO_CUB200_TEST  = "./data/cub-200-2011/valid.csv"
+
+PATH_TO_PETS_TRAIN   = "./data/oxford-pets/train.csv"
+PATH_TO_PETS_TEST    = "./data/oxford-pets/valid.csv"
 
 CIFAR_MEANS = [0.5073620348243464, 0.4866895632914624, 0.44108857134650736]
 CIFAR_STDS  = [0.2674881548800154, 0.2565930997269334, 0.2763085095510782]
@@ -395,3 +411,216 @@ class AdaptedCELoss(nn.Module):
 
     def forward(self, soft_prob, soft_targets):
         return -torch.sum(soft_targets * soft_prob) / soft_prob.size()[0]
+
+def get_activation(name, out_dict):
+    def hook(model, input, output):
+        out_dict[name] = output
+    return hook
+
+
+def prep_caltech():
+    PATH_TO_CALTECH = "./data/caltech-101/"
+
+    label_map = {
+        "path"  : [],
+        "class" : [],
+        "label" : []
+    }
+
+    for idx, folder in enumerate(glob.glob(PATH_TO_CALTECH + "*")):
+        label = folder.split("/")[-1]
+
+        for image_path in glob.glob(f"{folder}/*.jpg"):
+            label_map["path"].append(image_path)
+            label_map["class"].append(idx)
+            label_map["label"].append(label)
+
+            # break
+
+    label_map = pd.DataFrame(label_map)
+    label_map = label_map.sample(frac = 1, random_state = SEED)
+    label_map.reset_index(drop = True, inplace = True)
+
+    # display(len(np.unique(label_map["class"].values)))
+    train, valid = train_test_split(label_map, test_size = 0.2, random_state = SEED, stratify = label_map["class"])
+    # train.to_csv("./data/caltech-101/train.csv", index = False)
+    # valid.to_csv("./data/caltech-101/valid.csv", index = False)
+
+
+def prep_flowers():
+    PATH_TO_FLOWERS_IMAGES = "./data/flowers-102/images/"
+    PATH_TO_FLOWERS_LABELS = "./data/flowers-102/imagelabels.mat"
+    PATH_TO_FLOWERS_FOLDS  = "./data/flowers-102/setid.mat"
+
+    labels = scipy.io.loadmat(PATH_TO_FLOWERS_LABELS)
+    setids = scipy.io.loadmat(PATH_TO_FLOWERS_FOLDS)
+
+    labels    = labels["labels"][0]
+    train_idx = setids["trnid"][0].tolist()
+    valid_idx = setids["valid"][0].tolist()
+    test_idx  = setids["tstid"][0].tolist()
+
+    image_id_to_label = dict(enumerate((labels - 1).tolist(), 1))
+    print(len(np.unique(labels)))
+    train_label_map = {
+        "path"  : [],
+        "class" : []
+    }
+
+
+    training = train_idx + test_idx
+    for idx in training:
+        train_label_map["path"].append(PATH_TO_FLOWERS_IMAGES + f"image_{idx:05d}.jpg")
+        train_label_map["class"].append(image_id_to_label[idx])
+
+    train_label_map = pd.DataFrame(train_label_map)
+    train_label_map = train_label_map.sample(frac = 1, random_state = SEED)
+    train_label_map.reset_index(drop = True, inplace = True)
+    # train_label_map.to_csv("./data/flowers-102/train.csv", index = False)
+    display(train_label_map)
+
+    valid_label_map = {
+        "path"  : [],
+        "class" : []
+    }
+
+    for idx in valid_idx:
+        valid_label_map["path"].append(PATH_TO_FLOWERS_IMAGES + f"image_{idx:05d}.jpg")
+        valid_label_map["class"].append(image_id_to_label[idx])
+
+    valid_label_map = pd.DataFrame(valid_label_map)
+    valid_label_map = valid_label_map.sample(frac = 1, random_state = SEED)
+    valid_label_map.reset_index(drop = True, inplace = True)
+    # valid_label_map.to_csv("./data/flowers-102/valid.csv", index = False)
+    display(valid_label_map)
+
+def prep_cub200():
+    PATH_TO_CUB_IMAGES = "./data/cub-200-2011/images/"
+
+    label_map = {
+        "path"  : [],
+        "class" : [],
+        "label" : []
+    }
+
+    for idx, folder in enumerate(glob.glob(PATH_TO_CUB_IMAGES + "*")):
+        label = folder.split("/")[-1]
+
+        for image_path in glob.glob(f"{folder}/*.jpg"):
+            label_map["path"].append(image_path)
+            label_map["class"].append(idx)
+            label_map["label"].append(label)
+
+            # break
+
+    label_map = pd.DataFrame(label_map)
+    label_map = label_map.sample(frac = 1, random_state = SEED)
+    label_map.reset_index(drop = True, inplace = True)
+
+    # display(label_map)
+    # display(len(np.unique(label_map["class"].values)))
+    train, valid = train_test_split(label_map, test_size = 0.2, random_state = SEED, stratify = label_map["class"])
+    train.to_csv("./data/cub-200-2011/train.csv", index = False)
+    valid.to_csv("./data/cub-200-2011/valid.csv", index = False)
+
+def prep_cars():
+    PATH_TO_CARS_TRAIN_IMAGES = "./data/stanford-cars/car_data/car_data/train/"
+    PATH_TO_CARS_TEST_IMAGES  = "./data/stanford-cars/car_data/car_data/test/" 
+    PATH_TO_CARS_TRAIN_LABELS = "./data/stanford-cars/anno_train.csv"
+    PATH_TO_CARS_TEST_LABELS  = "./data/stanford-cars/anno_test.csv"
+
+    label_to_idx    = {}
+    train_label_map = {
+        "path"  : [],
+        "class" : [],
+        "label" : []
+    }
+
+    for idx, folder in sorted(enumerate(glob.glob(PATH_TO_CARS_TRAIN_IMAGES + "*"))):
+        label = folder.split("/")[-1]
+
+        label_to_idx[label] = idx
+        for image_path in glob.glob(f"{folder}/*.jpg"):
+            train_label_map["path"].append(image_path)
+            train_label_map["class"].append(idx)
+            train_label_map["label"].append(label)
+
+    train_label_map = pd.DataFrame(train_label_map)
+    train_label_map = train_label_map.sample(frac = 1, random_state = SEED)
+    train_label_map.reset_index(drop = True, inplace = True)
+
+    train_label_map.to_csv("./data/stanford-cars/train.csv", index = False)
+
+    valid_label_map = {
+        "path"  : [],
+        "class" : [],
+        "label" : []
+    }
+
+    for idx, folder in sorted(enumerate(glob.glob(PATH_TO_CARS_TEST_IMAGES + "*"))):
+        label = folder.split("/")[-1]
+
+        for image_path in glob.glob(f"{folder}/*.jpg"):
+            valid_label_map["path"].append(image_path)
+            valid_label_map["class"].append(label_to_idx[label])
+            valid_label_map["label"].append(label)
+
+    valid_label_map = pd.DataFrame(valid_label_map)
+    valid_label_map = valid_label_map.sample(frac = 1, random_state = SEED)
+    valid_label_map.reset_index(drop = True, inplace = True)
+
+    valid_label_map.to_csv("./data/stanford-cars/valid.csv", index = False)
+
+    # train_labels = pd.read_csv(PATH_TO_CARS_TRAIN_LABELS, names = ["id", "box1", "box2", "box3", "box4", "class"])
+    # train_labels["path"]  = train_labels["id"].apply(lambda x: PATH_TO_CARS_TRAIN_IMAGES + f"{x}")
+    # train_labels["class"] = train_labels["class"].apply(lambda x: x - 1)
+    # train_labels = train_labels[['id', 'path', 'class']]
+    # print(np.unique(train_labels["class"]))
+    # display(train_labels)
+
+    # print(len(glob.glob(PATH_TO_CARS_TEST_IMAGES + "*.jpg")))
+    # test_labels = pd.read_csv(PATH_TO_CARS_TEST_LABELS, names = ["id", "box1", "box2", "box3", "box4", "class"])
+    # test_labels["path"]  = test_labels["id"].apply(lambda x: PATH_TO_CARS_TEST_IMAGES + f"{x}")
+    # test_labels["class"] = test_labels["class"].apply(lambda x: x - 1)
+    # test_labels = test_labels[['id', 'path', 'class']]
+    # display(test_labels)
+    # # print(labels["annotations"][0][0])
+
+    # train_labels.to_csv("./data/stanford-cars/train.csv", index = False)
+    # test_labels.to_csv("./data/stanford-cars/valid.csv", index = False)
+
+
+def prep_pets():
+    from sklearn.preprocessing import OrdinalEncoder
+    PATH_TO_PETS_IMAGES = "./data/oxford-pets/images/"
+
+    label_map = {
+        "path"  : [],
+        "label" : []
+    }
+    
+    for image_path in sorted(glob.glob(PATH_TO_PETS_IMAGES + "*.jpg")):
+        label = image_path.split("/")[-1].split(".")[0]
+        label = "_".join(label.split("_")[:-1]).lower()
+        # print(label)
+
+        image = cv2.imread(image_path)
+        if image is None:
+            print(image_path)
+        else:
+            label_map["path"].append(image_path)
+            label_map["label"].append(label)
+
+    label_map = pd.DataFrame(label_map)
+    label_map = label_map.sample(frac = 1, random_state = SEED)
+    label_map.reset_index(drop = True, inplace = True)
+
+    encoder = OrdinalEncoder()
+    label_map["class"] = encoder.fit_transform(label_map["label"].values.reshape(-1, 1))
+    label_map["class"] = label_map["class"].astype(int)
+    # print(np.unique(label_map["class"]))
+    display(label_map)
+
+    train, valid = train_test_split(label_map, test_size = 0.2, random_state = SEED, stratify = label_map["class"])
+    train.to_csv("./data/oxford-pets/train.csv", index = False)
+    valid.to_csv("./data/oxford-pets/valid.csv", index = False)

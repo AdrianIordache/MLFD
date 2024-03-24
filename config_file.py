@@ -1,48 +1,50 @@
 from common import *
 
 PRINT_FREQ = 10
-USE_WANDB  = True
-RUN_NAME   = "exp-26-teacher-28"
+USE_WANDB  = False
+RUN_NAME   = "exp-5-student-p3"
 
 config = dict(
-	e_size    = 28,
+	e_size    = 7,
 	advanced  = False,
-	dataset   = "CIFAR100", # ["CIFAR100", "TinyImageNet", "ImageNetSketch"]
+	dataset   = "CUB200", # ["CIFAR100", "TinyImageNet", "ImageNetSketch", "Caltech101", "Flowers102", "CUB200", "OxfordPets"]
 	
-	image_size  = 224,
-	optimizer   = "AdamW",
-	scheduler   = "OneCycleLR", # "OneCycleLR",
-	epochs      = 137,
-	n_embedding = 768,
-	activation  = nn.Identity(),
+	image_size   = 224,
+	optimizer    = "Adam",
+	scheduler    = None, #"OneCycleLR",
+	epochs       = 262,
+	n_embedding  = 2048,
+	activation   = nn.Identity(),
+	accumulation = 1,
 
 	expert = dict(
 		model_name     = None, # "resnet18", tf_efficientnet_b0.in1k, "seresnext26t_32x4d"
 		num_classes    = None, # 100, 200, 1000
 		pretrained     = False, 
-		drop_rate      = 0.2,
-		drop_path_rate = 0.3, # stochastic depth
+		drop_rate      = 0.0,
+		drop_path_rate = 0.0, # stochastic depth
 	),
 
     teacher = dict(
-    	nf_space   = 512,
-    	nf_outputs = [128, 256, 512],  # [128, 256, 512],
+    	nf_space   = 2048 * 2,
+    	nf_outputs = [2048],  # [40, 112, 1280], # [128, 256, 512],
 		n_outputs  = None,
 
 		activation = nn.GELU(),
-		p_dropout  = 0.0
+		p_dropout  = 0.9
 	),
 
 	n_features_maps = dict(
-		nf_c =  128, # 128, # 256,  # 512,  # 2048,
-		nf_t =   40, #  40, # 112,  # 1280, # 2048,
-		nf_s =  512, # 512, # 1024, # 2048, # 2048,
+		nf_c = 512,  # 128, # 256,  # 512,  # 2048,
+		nf_t = 1280, #  40, # 112,  # 1280, # 2048,
+		nf_s = 2048, # 512, # 1024, # 2048, # 2048,
+		nf_o = 512,  # 128, # 256,  # 512,  # 2048
 	),
 
 	label_smoothing  = 0.1,
 	optimizer_param  = dict(
-		lr           = 0.00002,
-		weight_decay = 0.05,
+		lr           = 0.0003,
+		weight_decay = 0.001,
 	),
 
 	scheduler_param  = dict(
@@ -50,8 +52,8 @@ config = dict(
 		pct_start        = 0.133,
 		div_factor       = 25,
 		epochs           = None,
-		steps_per_epoch  = 99,
-		final_div_factor = 1e4
+		steps_per_epoch  = 13,
+		final_div_factor = 10000
 	),
 
 	use_timm = False,
@@ -80,9 +82,9 @@ config = dict(
 	),
 
 	trainloader = dict(
-		batch_size     = 512,
+		batch_size     = 192,
 		shuffle        = False, 
-		num_workers    = 2,
+		num_workers    = 8,
 		pin_memory     = True,
 		sampler        = sampler, 
 		worker_init_fn = seed_worker, 
@@ -92,7 +94,7 @@ config = dict(
 	testloader = dict(
 		batch_size     = None,
 		shuffle        = False, 
-		num_workers    = 2,
+		num_workers    = 8,
 		pin_memory     = True,
 		sampler        = sampler, 
 		worker_init_fn = seed_worker, 
@@ -105,28 +107,31 @@ config = dict(
     feature_map_loss  = nn.MSELoss(),
     kd_coefs          = [0.6, 0.2, 0.2],
     
+	mixed_precision   = False
 )
 
 config["scheduler_param"]["max_lr"] = config["optimizer_param"]["lr"]
 config["scheduler_param"]["epochs"] = config["epochs"]
 config["testloader"]["batch_size"]  = config["trainloader"]["batch_size"] * 2
 
-assert config["dataset"] in ["CIFAR100", "TinyImageNet", "ImageNetSketch"]
+config["scheduler_param"]["steps_per_epoch"] = config["scheduler_param"]["steps_per_epoch"] // config["accumulation"]
 
-if config["dataset"] == "CIFAR100": 
+assert config["dataset"] in ["CIFAR100", "TinyImageNet", "ImageNetSketch", "Caltech101", "Flowers102", "CUB200", "OxfordPets"]
 
-	config["teacher"]["n_outputs"]  = 100
-	config["expert"]["num_classes"] = 100
+if config["dataset"] == "CIFAR100" or config["dataset"] == "Caltech101": 
+
+	config["teacher"]["n_outputs"]  = 102 # 100
+	config["expert"]["num_classes"] = 102 # 100
 
 	if config["advanced"] == False:
 		config["expert"]["model_name"] = "resnet18"
 	else:
 		config["expert"]["model_name"] = "convnextv2_tiny.fcmae_ft_in22k_in1k"
 
-elif config["dataset"] == "TinyImageNet": 
+elif config["dataset"] == "TinyImageNet" or config["dataset"] == "Flowers102" or config["dataset"] == "OxfordPets": 
 
-	config["teacher"]["n_outputs"]  = 200
-	config["expert"]["num_classes"] = 200
+	config["teacher"]["n_outputs"]  = 102 # 200
+	config["expert"]["num_classes"] = 102 # 200
 
 	if config["advanced"] == False:
 		config["expert"]["model_name"] = "tf_efficientnet_b0.in1k"
@@ -135,8 +140,8 @@ elif config["dataset"] == "TinyImageNet":
 
 else: 
 
-	config["teacher"]["n_outputs"]  = 1000
-	config["expert"]["num_classes"] = 1000
+	config["teacher"]["n_outputs"]  = 200 # 1000
+	config["expert"]["num_classes"] = 200 # 1000
 
 	if config["advanced"] == False:
 		config["expert"]["model_name"] = "seresnext26t_32x4d"

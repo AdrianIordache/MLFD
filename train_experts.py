@@ -8,12 +8,13 @@ from procedures  import train, validate
 from timm.data.mixup import Mixup
 from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
 
+
 def run():
     CFG = config
     print(f"CFG: {CFG}")
     seed_everything(SEED)
-    
-    trainloader, testloader = get_dataloaders(CFG)
+
+    trainloader, testloader = get_dataloaders_advanced(CFG)
     mixup_fn = None if CFG["use_mixup"] == False else Mixup(**CFG['mixup_param'])
     
     model = ExpertModel(CFG["expert"], CFG["n_embedding"], CFG["activation"])
@@ -23,14 +24,15 @@ def run():
     scheduler   = get_scheduler(optimizer, CFG)
     t_criterion = SoftTargetCrossEntropy() if CFG["use_mixup"] == True else nn.CrossEntropyLoss(label_smoothing = CFG["label_smoothing"])
     v_criterion = nn.CrossEntropyLoss(label_smoothing = CFG["label_smoothing"])
+    scaler      = torch.cuda.amp.GradScaler()
 
     if USE_WANDB: 
-        wandb.init(project = f"{CFG['dataset']}-Advanced", name = RUN_NAME, config = CFG)
+        wandb.init(project = f"{CFG['dataset']}-Training", name = RUN_NAME, config = CFG)
 
     best_model, best_accuracy, best_epoch = None, 0, None
     for epoch in range(CFG["epochs"]):
-        train_top1_acc = train(model, trainloader, optimizer, scheduler, t_criterion, epoch, mixup_fn)
-        valid_top1_acc = validate(model, testloader, v_criterion)
+        train_top1_acc = train(model, trainloader, optimizer, scheduler, t_criterion, epoch, mixup_fn, CFG["accumulation"], scaler)
+        valid_top1_acc = validate(model, testloader, v_criterion, CFG)
 
         if valid_top1_acc > best_accuracy:
             best_model    = copy.deepcopy(model)
@@ -42,7 +44,7 @@ def run():
             break
 
     if USE_WANDB: 
-        torch.save(best_model.state_dict(), f"./weights/experts/stage-3/{CFG['dataset']}/{RUN_NAME}_epoch_{best_epoch}_acc@1_{best_accuracy}.pt")
+        torch.save(best_model.state_dict(), f"./weights/experts/stage-4/{CFG['dataset']}/{RUN_NAME}_epoch_{best_epoch}_acc@1_{best_accuracy}.pt")
         wandb.finish()
 
 if __name__ == "__main__":

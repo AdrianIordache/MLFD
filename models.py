@@ -58,10 +58,10 @@ class ExpertModel(nn.Module):
         self.model = timm.create_model(**config)
         # print(self.model)
         if "efficientnet" in config["model_name"]:
-            in_features = self.model.classifier.in_features
+            self.in_features = self.model.classifier.in_features
             self.model.classifier = nn.Identity()
         elif "resnet" in config["model_name"] or "resnext" in config["model_name"]:       
-            in_features = self.model.fc.in_features
+            self.in_features = self.model.fc.in_features
             self.model.fc = nn.Identity()
         else:
             self.in_features = self.model.head.fc.in_features
@@ -81,6 +81,65 @@ class ExpertModel(nn.Module):
         else:
             x = self.activation(self.latent_proj(x))
             x = self.output_proj(x)
+
+        return x
+
+class BaselineModel(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.model = timm.create_model(**config)
+
+        if "efficientnet" in config["model_name"]:
+            in_features = self.model.classifier.in_features
+            self.model.classifier = nn.Identity()
+        elif "resnet" in config["model_name"] or "resnext" in config["model_name"]:       
+            in_features = self.model.fc.in_features
+            self.model.fc = nn.Identity()
+        else:
+            in_features = self.model.head.in_features
+            self.model.head = nn.Identity()
+
+        self.CIFAR100Head       = nn.Linear(in_features, 100)
+        self.TinyImageNetHead   = nn.Linear(in_features, 200)
+        self.ImageNetSketchHead = nn.Linear(in_features, 1000)
+        
+    def forward(self, x, head):
+        assert head in ["CIFAR100", "TinyImageNet", "ImageNetSketch"]
+
+        features = self.model(x)
+
+        if head == "CIFAR100":
+            return self.CIFAR100Head(features)
+
+        if head == "TinyImageNet":
+            return self.TinyImageNetHead(features)
+
+        if head == "ImageNetSketch":
+            return self.ImageNetSketchHead(features) 
+
+        return features
+
+
+class BaselineExtendedModel(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.model = timm.create_model(**config)
+
+        if "efficientnet" in config["model_name"]:
+            in_features = self.model.classifier.in_features
+            self.model.classifier = nn.Identity()
+        elif "resnet" in config["model_name"] or "resnext" in config["model_name"]:       
+            in_features = self.model.fc.in_features
+            self.model.fc = nn.Identity()
+        else:
+            in_features = self.model.head.in_features
+            self.model.head = nn.Identity()
+
+        self.extended_head  = nn.Linear(in_features, 100 + 200 + 1000)
+        
+    def forward(self, x):
+        features = self.model(x)
+        x = self.extended_head(features)
 
         return x
 
@@ -167,6 +226,69 @@ class S1Teacher(nn.Module):
         x = self.projection(self.dropout(x))
         return x
         
+class S1TeacherConv(nn.Module):
+    def __init__(self, config):
+        super(S1Teacher, self).__init__()
+        self.config = config
+
+        assert len(config["nf_outputs"]) == 0, f"S1: Wrong teacher, len(config['nf_outputs']) = {len(config['nf_outputs'])}"
+
+        n_inputs = config["nf_c"] + config["nf_t"] + config["nf_s"]
+
+
+        self.dropout     = nn.Dropout(p = config["p_dropout"])
+        self.projection  = nn.Conv1d(1,   2048, kernel_size = 768, stride = 768) 
+        self.projection2 = nn.Linear(2048, 100) 
+        self.global_avg_pooling = nn.AdaptiveAvgPool1d(1)
+        self.activation = config["activation"]
+
+    def forward(self, x):
+        x = torch.unsqueeze(x, 1)
+        x = self.activation(self.projection(self.dropout(x)))
+        x = self.global_avg_pooling(x)
+        x = x.view(x.size(0), -1)
+        x = self.projection2(x)
+        # x = x.squeeze(2)
+        return x
+
+class S1TeacherAdv(nn.Module):
+    def __init__(self, config):
+        super(S1Teacher, self).__init__()
+        self.config = config
+
+        assert len(config["nf_outputs"]) == 0, f"S1: Wrong teacher, len(config['nf_outputs']) = {len(config['nf_outputs'])}"
+
+        n_inputs = config["nf_c"] + config["nf_t"] + config["nf_s"]
+
+        self.dropout  = nn.Dropout(p = config["p_dropout"])
+
+        self.c_bn = nn.BatchNorm1d(config["nf_c"])
+        self.t_bn = nn.BatchNorm1d(config["nf_t"])
+        self.s_bn = nn.BatchNorm1d(config["nf_s"])
+
+        self.c_filter = nn.Linear(config["nf_c"], config["nf_space"])
+        self.t_filter = nn.Linear(config["nf_t"], config["nf_space"])
+        self.s_filter = nn.Linear(config["nf_s"], config["nf_space"])
+
+        self.projection_norm = nn.BatchNorm1d(config["nf_space"] * 3)
+        self.projection = nn.Linear(config["nf_space"] * 3, config["n_outputs"]) 
+        
+    def forward(self, inputs):
+        x = inputs[:,      : 768 ]
+        y = inputs[:, 768  : 1536]
+        z = inputs[:, 1536 :     ]
+
+        x = self.c_filter(self.c_bn(x))
+        y = self.t_filter(self.t_bn(y))
+        z = self.s_filter(self.s_bn(z))
+
+        out = torch.cat((x, y, z), dim = 1)
+        out = self.activation(self.projection_norm(out))
+        out = self.projection(self.dropout(out))
+
+        return out
+        
+
 
 class S7Teacher(nn.Module):
     def __init__(self, config):
@@ -178,14 +300,16 @@ class S7Teacher(nn.Module):
         self.c_bn = nn.BatchNorm2d(config["nf_c"])
         self.t_bn = nn.BatchNorm2d(config["nf_t"])
         self.s_bn = nn.BatchNorm2d(config["nf_s"])
+        self.o_bn = nn.BatchNorm2d(config["nf_o"])
 
         self.c_projection = nn.Conv2d(config["nf_c"], config["nf_space"], kernel_size = (1, 1), stride = 1)
         self.t_projection = nn.Conv2d(config["nf_t"], config["nf_space"], kernel_size = (1, 1), stride = 1)
         self.s_projection = nn.Conv2d(config["nf_s"], config["nf_space"], kernel_size = (1, 1), stride = 1)
+        self.o_projection = nn.Conv2d(config["nf_o"], config["nf_space"], kernel_size = (1, 1), stride = 1)
 
-        self.concat_norm       = nn.BatchNorm2d(config["nf_space"] * 3)
+        self.concat_norm       = nn.BatchNorm2d(config["nf_space"] * 4)
         self.filter_projection = nn.Conv2d(
-            config["nf_space"] * 3, config["nf_outputs"][0], 
+            config["nf_space"] * 4, config["nf_outputs"][0], 
             kernel_size = (1, 1), stride = 1
         )
         self.projection_norm   = nn.BatchNorm2d(config["nf_outputs"][0])
@@ -199,17 +323,20 @@ class S7Teacher(nn.Module):
 
         self.first_boundary  = config["nf_c"]
         self.second_boundary = config["nf_c"] + config["nf_t"]
+        self.third_boundary  = config["nf_c"] + config["nf_t"] + config["nf_s"]
 
     def forward(self, inputs, out_maps = False):
         x = inputs[:,                      :  self.first_boundary, :, :]
         y = inputs[:, self.first_boundary  : self.second_boundary, :, :]
-        z = inputs[:, self.second_boundary :,                      :, :]
+        z = inputs[:, self.second_boundary : self.third_boundary,  :, :]
+        o = inputs[:, self.third_boundary  : ,  :, :]
 
         x = self.c_projection(self.c_bn(x))
         y = self.t_projection(self.t_bn(y))
         z = self.s_projection(self.s_bn(z))
+        o = self.o_projection(self.o_bn(o))
 
-        out = torch.cat((x, y, z), dim = 1)
+        out = torch.cat((x, y, z, o), dim = 1)
         out = self.activation(self.concat_norm(out))
 
         out  = self.filter_projection(out)
