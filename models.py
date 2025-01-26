@@ -48,8 +48,12 @@ class IntermediateModel(nn.Module):
         x = self.model(x)
         if backbone: return x
         x = self.activation(self.intermediate(x))
-        if embeddings: return x
-        x = self.head(x)
+        # if embeddings: return x
+        logits = self.head(x)
+
+        if embeddings:
+            return x, logits
+            
         return x
 
 class ExpertModel(nn.Module):
@@ -97,7 +101,7 @@ class BaselineModel(nn.Module):
             self.model.fc = nn.Identity()
         else:
             in_features = self.model.head.in_features
-            self.model.head = nn.Identity()
+            self.model.head.fc = nn.Identity()
 
         self.CIFAR100Head       = nn.Linear(in_features, 100)
         self.TinyImageNetHead   = nn.Linear(in_features, 200)
@@ -133,7 +137,7 @@ class BaselineExtendedModel(nn.Module):
             self.model.fc = nn.Identity()
         else:
             in_features = self.model.head.in_features
-            self.model.head = nn.Identity()
+            self.model.head.fc = nn.Identity()
 
         self.extended_head  = nn.Linear(in_features, 100 + 200 + 1000)
         
@@ -300,16 +304,16 @@ class S7Teacher(nn.Module):
         self.c_bn = nn.BatchNorm2d(config["nf_c"])
         self.t_bn = nn.BatchNorm2d(config["nf_t"])
         self.s_bn = nn.BatchNorm2d(config["nf_s"])
-        self.o_bn = nn.BatchNorm2d(config["nf_o"])
+        # self.o_bn = nn.BatchNorm2d(config["nf_o"])
 
         self.c_projection = nn.Conv2d(config["nf_c"], config["nf_space"], kernel_size = (1, 1), stride = 1)
         self.t_projection = nn.Conv2d(config["nf_t"], config["nf_space"], kernel_size = (1, 1), stride = 1)
         self.s_projection = nn.Conv2d(config["nf_s"], config["nf_space"], kernel_size = (1, 1), stride = 1)
-        self.o_projection = nn.Conv2d(config["nf_o"], config["nf_space"], kernel_size = (1, 1), stride = 1)
+        # self.o_projection = nn.Conv2d(config["nf_o"], config["nf_space"], kernel_size = (1, 1), stride = 1)
 
-        self.concat_norm       = nn.BatchNorm2d(config["nf_space"] * 4)
+        self.concat_norm       = nn.BatchNorm2d(config["nf_space"] * 3)
         self.filter_projection = nn.Conv2d(
-            config["nf_space"] * 4, config["nf_outputs"][0], 
+            config["nf_space"] * 3, config["nf_outputs"][0], 
             kernel_size = (1, 1), stride = 1
         )
         self.projection_norm   = nn.BatchNorm2d(config["nf_outputs"][0])
@@ -323,20 +327,20 @@ class S7Teacher(nn.Module):
 
         self.first_boundary  = config["nf_c"]
         self.second_boundary = config["nf_c"] + config["nf_t"]
-        self.third_boundary  = config["nf_c"] + config["nf_t"] + config["nf_s"]
+        # self.third_boundary  = config["nf_c"] + config["nf_t"] + config["nf_s"]
 
     def forward(self, inputs, out_maps = False):
-        x = inputs[:,                      :  self.first_boundary, :, :]
-        y = inputs[:, self.first_boundary  : self.second_boundary, :, :]
-        z = inputs[:, self.second_boundary : self.third_boundary,  :, :]
-        o = inputs[:, self.third_boundary  : ,  :, :]
+        x = inputs[:,                      : self.first_boundary,  :, :]
+        y = inputs[:, self.first_boundary  : self.second_boundary,  :, :]
+        z = inputs[:, self.second_boundary :,  :, :]
+        # o = inputs[:, self.third_boundary  : ,  :, :]
 
         x = self.c_projection(self.c_bn(x))
         y = self.t_projection(self.t_bn(y))
         z = self.s_projection(self.s_bn(z))
-        o = self.o_projection(self.o_bn(o))
+        # o = self.o_projection(self.o_bn(o))
 
-        out = torch.cat((x, y, z, o), dim = 1)
+        out = torch.cat((x, y, z), dim = 1)
         out = self.activation(self.concat_norm(out))
 
         out  = self.filter_projection(out)

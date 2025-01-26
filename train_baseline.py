@@ -23,7 +23,7 @@ def run():
     criterion = nn.CrossEntropyLoss()
 
     if USE_WANDB: 
-        wandb.init(project = f"{CFG['dataset']}-Training", name = RUN_NAME, config = CFG)
+        wandb.init(project = f"{CFG['dataset']}-Advanced", name = RUN_NAME, config = CFG)
 
     best_model, best_accuracy, best_epoch = None, 0, None
     for epoch in range(CFG["epochs"]):

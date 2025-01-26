@@ -204,7 +204,7 @@ def get_dataloaders(config, distillation = False):
     return trainloader, testloader
 
 class TeacherDataset(Dataset):
-    def __init__(self, path_to_samples, path_to_labels, nf_c, nf_t, nf_s, nf_o):
+    def __init__(self, path_to_samples, path_to_labels, nf_c, nf_t):#, nf_s): #, nf_o):
         super().__init__()
         self.path_to_samples = path_to_samples
         self.path_to_labels  = path_to_labels
@@ -213,8 +213,8 @@ class TeacherDataset(Dataset):
         
         self.nf_c = nf_c
         self.nf_t = nf_t
-        self.nf_s = nf_s
-        self.nf_o = nf_o
+        # self.nf_s = nf_s
+        # self.nf_o = nf_o
 
     def __len__(self):
         return len(self.labels)
@@ -222,7 +222,7 @@ class TeacherDataset(Dataset):
     def __getitem__(self, ix):
         path_to_sample = os.path.join(
             self.path_to_samples, 
-            f"sample_{self.nf_c}x{self.nf_t}x{self.nf_s}x{self.nf_o}_{ix}.npy"
+            f"sample_{self.nf_c}x{self.nf_t}_{ix}.npy"
         )
 
         sample = np.load(path_to_sample, mmap_mode = "r")
@@ -288,7 +288,7 @@ class CIFAR100_Distillation_Dataset(Dataset):
             return image.float(), label.long()
 
 class ImageNet_Distillation_Dataset(Dataset):
-    def __init__(self, data, transform = None, path_to_samples = None, path_to_labels = None, nf_c = None, nf_t = None, nf_s = None, nf_o = None):
+    def __init__(self, data, transform = None, path_to_samples = None, path_to_labels = None, nf_c = None, nf_t = None): #, nf_s = None): #, nf_o = None):
         super().__init__()
         self.data      = data
         self.transform = transform
@@ -298,8 +298,8 @@ class ImageNet_Distillation_Dataset(Dataset):
 
         self.nf_c = nf_c
         self.nf_t = nf_t
-        self.nf_s = nf_s
-        self.nf_o = nf_o
+        # self.nf_s = nf_s
+        # self.nf_o = nf_o
 
         if self.path_to_labels is not None:
             self.emb_labels = np.load(self.path_to_labels)  
@@ -327,7 +327,7 @@ class ImageNet_Distillation_Dataset(Dataset):
         if self.distillation:
             path_to_sample = os.path.join(
                 self.path_to_samples, 
-                f"sample_{self.nf_c}x{self.nf_t}x{self.nf_s}x{self.nf_o}_{idx}.npy"
+                f"sample_{self.nf_c}x{self.nf_t}_{idx}.npy"
             )
 
             sample  = np.load(path_to_sample, mmap_mode = "r")
@@ -351,7 +351,7 @@ def get_dataloaders_advanced(config, distillation = False):
     path_to_train_labels  = None
 
     if distillation:
-        path_to_embeddings = f"./embeddings/stage-4/part-3/{config['dataset']}/train/"
+        path_to_embeddings = f"./embeddings/stage-6/{config['dataset']}/train/" # f"./embeddings/stage-4/part-3/{config['dataset']}/train/"
         path_to_train_samples = os.path.join(path_to_embeddings, f"{config['e_size']}x{config['e_size']}")
         path_to_train_labels  = os.path.join(path_to_embeddings, f"{config['dataset']}_train_labels.npy")
 

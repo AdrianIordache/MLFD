@@ -279,11 +279,19 @@ if __name__ == "__main__":
         # ImageNetSketchModel.intermediate.register_forward_hook(get_activation('size_1',  imagenet_sketch_outputs))
 
 
-        PATH_TO_CIFAR100_MODEL        = "./weights/experts/stage-4/Caltech101/exp-1-baseline_epoch_286_acc@1_0.748.pt"
-        PATH_TO_TINY_IMAGENET_MODEL   = "./weights/experts/stage-4/Flowers102/exp-1-baseline_epoch_188_acc@1_0.78.pt"
-        PATH_TO_IMAGENET_SKETCH_MODEL = "./weights/experts/stage-4/CUB200/exp-1-baseline_epoch_288_acc@1_0.514.pt"
-        PATH_TO_OTHER_MODEL           = "./weights/experts/stage-4/OxfordPets/exp-1-baseline_epoch_274_acc@1_0.639.pt"
+        # PATH_TO_CIFAR100_MODEL        = "./weights/experts/stage-4/Caltech101/exp-1-baseline_epoch_286_acc@1_0.748.pt"
+        # PATH_TO_TINY_IMAGENET_MODEL   = "./weights/experts/stage-4/Flowers102/exp-1-baseline_epoch_188_acc@1_0.78.pt"
+        # PATH_TO_IMAGENET_SKETCH_MODEL = "./weights/experts/stage-4/CUB200/exp-1-baseline_epoch_288_acc@1_0.514.pt"
+        # PATH_TO_OTHER_MODEL           = "./weights/experts/stage-4/OxfordPets/exp-1-baseline_epoch_274_acc@1_0.639.pt"
 
+
+
+        PATH_TO_CIFAR100_MODEL        = "./weights/experts/stage-4/Caltech101/exp-1-baseline_epoch_286_acc@1_0.748.pt" # "./weights/experts/stage-5/ImageNetSketch/exp-29-ensemble-resnet_epoch_159_acc@1_0.227.pt"
+        PATH_TO_TINY_IMAGENET_MODEL   = "./weights/experts/stage-4/OxfordPets/exp-1-baseline_epoch_274_acc@1_0.639.pt" # "./weights/experts/stage-5/ImageNetSketch/exp-30-ensemble-efficientnet_epoch_193_acc@1_0.292.pt"
+        # PATH_TO_IMAGENET_SKETCH_MODEL = "./weights/experts/stage-4/CUB200/exp-1-baseline_epoch_288_acc@1_0.514.pt" # "./weights/experts/stage-1/ImageNetSketch/exp-6-identity-2048.pt"
+        # PATH_TO_OTHER_MODEL           = "./weights/experts/stage-4/OxfordPets/exp-1-baseline_epoch_274_acc@1_0.639.pt"
+
+        # CFG["ImageNetSketch"]["model_name"] = "resnet18"
         CIFAR100Model = ExpertModel(CFG["Caltech101"], CFG["n_embedding"], CFG["activation"]).to(DEVICE)
         CIFAR100Model.load_state_dict(torch.load(PATH_TO_CIFAR100_MODEL))
         CIFAR100Model.eval()
@@ -293,29 +301,38 @@ if __name__ == "__main__":
         CIFAR100Model.model.layer4.register_forward_hook(get_activation('size_7',  cifar100_outputs))
         # CIFAR100Model.intermediate.register_forward_hook(get_activation('size_1',  cifar100_outputs))
 
-        TinyImageNetModel = ExpertModel(CFG["Flowers102"], CFG["n_embedding"], CFG["activation"]).to(DEVICE)
+
+        TinyImageNetModel = ExpertModel(CFG["OxfordPets"], CFG["n_embedding"], CFG["activation"]).to(DEVICE)
         TinyImageNetModel.load_state_dict(torch.load(PATH_TO_TINY_IMAGENET_MODEL))
         TinyImageNetModel.eval()
 
+        TinyImageNetModel.model.layer4.register_forward_hook(get_activation('size_7',  tiny_imagenet_outputs))
+
+        # CFG["ImageNetSketch"]["model_name"] = "tf_efficientnet_b0"
+        # TinyImageNetModel = ExpertModel(CFG["Flowers102"], CFG["n_embedding"], CFG["activation"]).to(DEVICE)
+        # TinyImageNetModel.load_state_dict(torch.load(PATH_TO_TINY_IMAGENET_MODEL))
+        # TinyImageNetModel.eval()
+
         # TinyImageNetModel.model.blocks[2].register_forward_hook(get_activation('size_28', tiny_imagenet_outputs))
         # TinyImageNetModel.model.blocks[4].register_forward_hook(get_activation('size_14', tiny_imagenet_outputs))
-        TinyImageNetModel.model.conv_head.register_forward_hook(get_activation('size_7',  tiny_imagenet_outputs))
+        # TinyImageNetModel.model.conv_head.register_forward_hook(get_activation('size_7',  tiny_imagenet_outputs))
         # TinyImageNetModel.intermediate.register_forward_hook(get_activation('size_1',     tiny_imagenet_outputs))
 
-        ImageNetSketchModel = ExpertModel(CFG["CUB200"], CFG["n_embedding"], CFG["activation"]).to(DEVICE)
-        ImageNetSketchModel.load_state_dict(torch.load(PATH_TO_IMAGENET_SKETCH_MODEL))
-        ImageNetSketchModel.eval()
+        # CFG["ImageNetSketch"]["model_name"] = "seresnext26t_32x4d"
+        # ImageNetSketchModel = ExpertModel(CFG["CUB200"], CFG["n_embedding"], CFG["activation"]).to(DEVICE)
+        # ImageNetSketchModel.load_state_dict(torch.load(PATH_TO_IMAGENET_SKETCH_MODEL))
+        # ImageNetSketchModel.eval()
 
         # ImageNetSketchModel.model.layer2.register_forward_hook(get_activation('size_28', imagenet_sketch_outputs))
         # ImageNetSketchModel.model.layer3.register_forward_hook(get_activation('size_14', imagenet_sketch_outputs))
-        ImageNetSketchModel.model.layer4.register_forward_hook(get_activation('size_7',  imagenet_sketch_outputs))
+        # ImageNetSketchModel.model.layer4.register_forward_hook(get_activation('size_7',  imagenet_sketch_outputs))
         # ImageNetSketchModel.intermediate.register_forward_hook(get_activation('size_1',  imagenet_sketch_outputs))
 
-        OtherModel = ExpertModel(CFG["OxfordPets"], CFG["n_embedding"], CFG["activation"]).to(DEVICE)
-        OtherModel.load_state_dict(torch.load(PATH_TO_OTHER_MODEL))
-        OtherModel.eval()
+        # OtherModel = ExpertModel(CFG["OxfordPets"], CFG["n_embedding"], CFG["activation"]).to(DEVICE)
+        # OtherModel.load_state_dict(torch.load(PATH_TO_OTHER_MODEL))
+        # OtherModel.eval()
 
-        OtherModel.model.layer4.register_forward_hook(get_activation('size_7',  other_outputs))
+        # OtherModel.model.layer4.register_forward_hook(get_activation('size_7',  other_outputs))
 
     SIZES = []
     if CFG["advanced"] == True:
@@ -323,7 +340,7 @@ if __name__ == "__main__":
     else:
         SIZES = [7]
 
-    for data_type in ["Caltech101", "Flowers102", "CUB200", "OxfordPets"]: # "CIFAR100", "TinyImageNet", "ImageNetSketch"
+    for data_type in ["Caltech101", "OxfordPets"]: # "Caltech101", "Flowers102", "CUB200", "OxfordPets" # "CIFAR100", "TinyImageNet", "ImageNetSketch"
         trainset, testset = get_datasets(data_type, CFG)
 
         trainloader = DataLoader(trainset, **CFG["loader"])
@@ -333,7 +350,7 @@ if __name__ == "__main__":
             counter = 0
             start = end = time.time()
 
-            PATH_TO_EMBEDDINGS = f"./embeddings/stage-4/part-3/{data_type}/{mode}"
+            PATH_TO_EMBEDDINGS = f"./embeddings/stage-6/{data_type}/{mode}" # f"./embeddings/stage-4/part-3/{data_type}/{mode}"
             os.makedirs(PATH_TO_EMBEDDINGS, exist_ok = True)
 
             PATHS = {}
@@ -351,29 +368,29 @@ if __name__ == "__main__":
                 with torch.no_grad():
                     _  = CIFAR100Model(image).cpu().detach().numpy()
                     _  = TinyImageNetModel(image).cpu().detach().numpy()
-                    _  = ImageNetSketchModel(image).cpu().detach().numpy()
-                    _  = OtherModel(image).cpu().detach().numpy()
+                    # _  = ImageNetSketchModel(image).cpu().detach().numpy()
+                    # _  = OtherModel(image).cpu().detach().numpy()
 
                 sample = {}
                 for size in SIZES:
                     cifar100_sample = cifar100_outputs[f"size_{size}"].cpu().detach().squeeze(0)
                     tiny_imagenet_sample = tiny_imagenet_outputs[f"size_{size}"].cpu().detach().squeeze(0)
-                    imagenet_sketch_sample = imagenet_sketch_outputs[f"size_{size}"].cpu().detach().squeeze(0)
-                    other_sample = other_outputs[f"size_{size}"].cpu().detach().squeeze(0)
+                    # imagenet_sketch_sample = imagenet_sketch_outputs[f"size_{size}"].cpu().detach().squeeze(0)
+                    # other_sample = other_outputs[f"size_{size}"].cpu().detach().squeeze(0)
 
                     if CFG["advanced"] == True and len(tiny_imagenet_sample.shape) != 1:
                         tiny_imagenet_sample = torch.permute(tiny_imagenet_sample, (2, 0, 1))
                     
                     c_size = cifar100_sample.shape[0]
                     t_size = tiny_imagenet_sample.shape[0]
-                    s_size = imagenet_sketch_sample.shape[0]
-                    o_size = other_sample.shape[0]
+                    # s_size = imagenet_sketch_sample.shape[0]
+                    # o_size = other_sample.shape[0]
 
                     sample[f"size_{size}"] = torch.cat((
-                        cifar100_sample, tiny_imagenet_sample, imagenet_sketch_sample, other_sample
+                        cifar100_sample, tiny_imagenet_sample #, imagenet_sketch_sample #, other_sample
                     ), dim = 0).numpy()
 
-                    with open(f"{PATHS[f'size_{size}']}/sample_{c_size}x{t_size}x{s_size}x{o_size}_{counter}.npy", "wb") as handler:
+                    with open(f"{PATHS[f'size_{size}']}/sample_{c_size}x{t_size}_{counter}.npy", "wb") as handler:
                         np.save(handler, sample[f"size_{size}"])
 
                 counter += 1

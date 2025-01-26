@@ -150,7 +150,8 @@ def imshow(inp, title = None, means = IMAGENET_MEANS, stds = IMAGENET_STDS):
     inp = std * inp + mean
     inp = np.clip(inp, 0, 1)
     plt.imshow(inp[:,:,[2,1,0]])
-    plt.savefig("image.png")
+    # plt.savefig("image.png")
+    plt.show()
 
     # inputs, classes = next(iter(trainloader))
     # out = torchvision.utils.make_grid(inputs)

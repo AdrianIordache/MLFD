@@ -25,7 +25,6 @@ class KnowledgeDistillationLoss(nn.Module):
         ce_loss   = cross_entropy(student_logits, labels)
 
         if student_maps is not None and teacher_maps is not None:
-            # print("loss_bu")
             maps_loss = self.feature_map_loss(student_maps, teacher_maps)
             return self.kd_coefs[0] * dist_loss + self.kd_coefs[1] * maps_loss + self.kd_coefs[2] * ce_loss
         
@@ -33,6 +32,7 @@ class KnowledgeDistillationLoss(nn.Module):
 
 # student_maps = torch.permute(student_maps, (0, 3, 1, 2))
 def run():
+    print(config)
     CFG = config
     seed_everything(SEED)
 
@@ -43,10 +43,15 @@ def run():
     # f"./weights/teachers/stage-3/CIFAR100/exp-18-teacher-1_epoch_421_acc@1_0.678.pt
     # f"./weights/teachers/stage-3/TinyImageNet/exp-28-teacher-1_epoch_462_acc@1_0.642.pt"
     # f"./weights/teachers/stage-3/TinyImageNet/exp-29-teacher-8_epoch_126_acc@1_0.655.pt"
-    # f"./weights/teachers/stage-3/ImageNetSketch/exp-16-teacher-1_epoch_1657_acc@1_0.684.pt" # exp-4-teacher-p3_epoch_251_acc@1_0.573.pt
-    teacher.load_state_dict(torch.load(f"./weights/teachers/stage-4/{CFG['dataset']}/exp-4-teacher-p3_epoch_251_acc@1_0.573.pt"))
+    # f"./weights/teachers/stage-3/ImageNetSketch/exp-16-teacher-1_epoch_1657_acc@1_0.684.pt" # exp-4-teacher-p3_epoch_251_acc@1_0.573.pt #exp-4-teacher-p3_epoch_251_acc@1_0.573.pt
+    teacher.load_state_dict(torch.load(f"./weights/teachers/stage-6/OxfordPets/exp-6-teacher-single_epoch_140_acc@1_0.651.pt")) #f"./weights/teachers/stage-4/{CFG['dataset']}/exp-4-teacher-blind_epoch_237_acc@1_0.542.pt"))
     teacher.to(DEVICE)
     teacher.eval()
+
+    # teacher = ExpertModel(CFG["expert_t"], CFG["n_embedding"], CFG["activation"])
+    # teacher.load_state_dict(torch.load(f"./weights/experts/stage-1/{CFG['dataset']}/exp-34-larger-experts_epoch_194_acc@1_0.644.pt"))
+    # teacher.to(DEVICE)
+    # teacher.eval()
 
     trainloader, testloader = get_dataloaders_advanced(CFG, distillation = True)
     mixup_fn = None if CFG["use_mixup"] == False else Mixup(**CFG['mixup_param'])
@@ -72,6 +77,7 @@ def run():
 
     best_model, best_accuracy, best_epoch = None, 0, None
     for epoch in range(CFG["epochs"]):
+        tic = time.time()
         train_top1_acc = train_kd(student, teacher, trainloader, optimizer, scheduler, criterion_kd, epoch, scaler, CFG)
         valid_top1_acc = validate(student, testloader, v_criterion, CFG)
 
@@ -80,8 +86,13 @@ def run():
             best_accuracy = valid_top1_acc
             best_epoch    = epoch
 
+        toc = time.time()
+        print(f"Epoch time: {(toc - tic)}'s")
+
     if USE_WANDB: 
-        torch.save(best_model.state_dict(), f"./weights/students/stage-4/{CFG['dataset']}/{RUN_NAME}_epoch_{best_epoch}_acc@1_{np.round(best_accuracy, 3)}.pt")
+        PATH_TO_SAVED_MODEL = f"./weights/students/stage-5/{CFG['dataset']}/"
+        os.makedirs(PATH_TO_SAVED_MODEL, exist_ok = True)
+        torch.save(best_model.state_dict(), f"{PATH_TO_SAVED_MODEL}/{RUN_NAME}_epoch_{best_epoch}_acc@1_{best_accuracy}.pt")
         wandb.finish()
 
 if __name__ == "__main__":

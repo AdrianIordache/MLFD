@@ -6,11 +6,12 @@ from config_file   import *
 from procedures    import train, validate
 
 def run():
+    print(config)
     CFG = config
     seed_everything(SEED)
 
-    PATH_TO_TRAIN_EMBEDDINGS = f"./embeddings/stage-4/part-3/{CFG['dataset']}/train/"
-    PATH_TO_TEST_EMBEDDINGS  = f"./embeddings/stage-4/part-3/{CFG['dataset']}/test/"
+    PATH_TO_TRAIN_EMBEDDINGS = f"embeddings/stage-6/{CFG['dataset']}/train/" # f"./embeddings/stage-4/part-3/{CFG['dataset']}/train/"
+    PATH_TO_TEST_EMBEDDINGS  = f"embeddings/stage-6/{CFG['dataset']}/test/"  # f"./embeddings/stage-4/part-3/{CFG['dataset']}/test/"
 
     PATH_TO_TRAIN_SAMPLES = os.path.join(PATH_TO_TRAIN_EMBEDDINGS, f"{CFG['e_size']}x{CFG['e_size']}")
     PATH_TO_TEST_SAMPLES  = os.path.join(PATH_TO_TEST_EMBEDDINGS,  f"{CFG['e_size']}x{CFG['e_size']}")
@@ -49,7 +50,7 @@ def run():
             best_epoch    = epoch
 
     if USE_WANDB:     
-        PATH_TO_SAVED_MODEL = f"./weights/teachers/stage-4/{CFG['dataset']}"
+        PATH_TO_SAVED_MODEL = f"./weights/teachers/stage-6/{CFG['dataset']}/"
         os.makedirs(PATH_TO_SAVED_MODEL, exist_ok = True)
         torch.save(best_model.state_dict(), f"{PATH_TO_SAVED_MODEL}/{RUN_NAME}_epoch_{best_epoch}_acc@1_{best_accuracy}.pt")
         wandb.finish()

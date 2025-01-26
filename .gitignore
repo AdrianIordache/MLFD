@@ -6,3 +6,7 @@ embeddings/
 delete.py
 utils/
 .hypothesis/
+linear_probing.py
+norm_distillation.py
+object_detections/
+teacher_free_distillation.py

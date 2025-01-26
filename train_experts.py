@@ -25,12 +25,13 @@ def run():
     t_criterion = SoftTargetCrossEntropy() if CFG["use_mixup"] == True else nn.CrossEntropyLoss(label_smoothing = CFG["label_smoothing"])
     v_criterion = nn.CrossEntropyLoss(label_smoothing = CFG["label_smoothing"])
     scaler      = torch.cuda.amp.GradScaler()
-
+    
     if USE_WANDB: 
         wandb.init(project = f"{CFG['dataset']}-Training", name = RUN_NAME, config = CFG)
 
     best_model, best_accuracy, best_epoch = None, 0, None
     for epoch in range(CFG["epochs"]):
+        tic = time.time()
         train_top1_acc = train(model, trainloader, optimizer, scheduler, t_criterion, epoch, mixup_fn, CFG["accumulation"], scaler)
         valid_top1_acc = validate(model, testloader, v_criterion, CFG)
 
@@ -43,8 +44,13 @@ def run():
             print("Early stopping condition...")
             break
 
+        toc = time.time()
+        print(f"Epoch time: {(toc - tic)}'s")
+
     if USE_WANDB: 
-        torch.save(best_model.state_dict(), f"./weights/experts/stage-4/{CFG['dataset']}/{RUN_NAME}_epoch_{best_epoch}_acc@1_{best_accuracy}.pt")
+        PATH_TO_SAVED_MODEL = f"./weights/experts/stage-5/{CFG['dataset']}/"
+        os.makedirs(PATH_TO_SAVED_MODEL, exist_ok = True)
+        torch.save(best_model.state_dict(), f"{PATH_TO_SAVED_MODEL}/{RUN_NAME}_epoch_{best_epoch}_acc@1_{best_accuracy}.pt")
         wandb.finish()
 
 if __name__ == "__main__":
